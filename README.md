@@ -1,36 +1,144 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kedil Admin Panel
+
+A comprehensive admin panel for managing the Kedil financial management system. Built with Next.js, TypeScript, React Query, and shadcn/ui components.
+
+## Features
+
+- **User Management**: View and manage all registered users
+- **Bank Master**: CRUD operations for bank master records with image upload support
+- **Categories**: Full CRUD operations for budget categories
+- **Analysis & Reports**: Financial analysis with charts and statistics
+- **Admin Authentication**: Simple password-based authentication
+- **Modern UI**: Clean, minimal design using shadcn/ui components
+- **High Performance**: Optimized with React Query for efficient data fetching
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ and npm
+- Backend API running (default: http://localhost:8080)
+
+### Installation
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create a `.env.local` file (or copy from `.env.example`):
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_ADMIN_PASSWORD=admin123
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Run the development server:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Learn More
+### Default Login
 
-To learn more about Next.js, take a look at the following resources:
+- Password: `admin123` (or whatever you set in `NEXT_PUBLIC_ADMIN_PASSWORD`)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+kedil_admin_panel/
+├── src/
+│   ├── app/              # Next.js app router pages
+│   │   ├── auth/         # Authentication pages
+│   │   ├── users/        # User management
+│   │   ├── bank-master/  # Bank master CRUD
+│   │   ├── categories/   # Category management
+│   │   ├── dashboard/    # Dashboard overview
+│   │   └── analysis/     # Analysis & reports
+│   ├── components/       # React components
+│   │   ├── ui/           # shadcn/ui components
+│   │   ├── layout/       # Layout components
+│   │   └── auth/         # Auth components
+│   ├── lib/              # Utilities and API clients
+│   │   ├── api/          # API client functions
+│   │   └── hooks/        # React Query hooks
+│   └── types/            # TypeScript types
+└── public/               # Static assets
+```
 
-## Deploy on Vercel
+## API Integration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The admin panel connects to the Kedil backend API. Make sure the backend is running and accessible at the URL specified in `NEXT_PUBLIC_API_URL`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### API Endpoints Used
+
+- `/api/users` - User management
+- `/api/bank-master` - Bank master operations
+- `/api/categories` - Category operations
+- `/api/categories/dashboard` - Dashboard data
+- `/api/categories/search` - Category search
+
+## Features in Detail
+
+### Users Page
+- View all registered users
+- View detailed user information
+- Search and filter capabilities
+
+### Bank Master Page
+- Create new banks with logo upload
+- View all banks in a table
+- Delete banks
+- Auto-generates slug and short name if not provided
+
+### Categories Page
+- Create, update, and delete categories
+- View category details including allocated amounts
+- Group categories by groups
+- Auto-create groups if not provided
+
+### Analysis Page
+- Financial overview with key metrics
+- Interactive charts (Bar and Line charts)
+- Date range filtering
+- Category and group breakdowns
+- Real-time data visualization
+
+## Technologies Used
+
+- **Next.js 16** - React framework
+- **TypeScript** - Type safety
+- **React Query** - Data fetching and caching
+- **shadcn/ui** - UI component library
+- **Tailwind CSS** - Styling
+- **Recharts** - Chart library
+- **Axios** - HTTP client
+- **Lucide React** - Icons
+
+## Development
+
+### Build for Production
+
+```bash
+npm run build
+npm start
+```
+
+### Environment Variables
+
+- `NEXT_PUBLIC_API_URL` - Backend API URL (default: http://localhost:8080)
+- `NEXT_PUBLIC_ADMIN_PASSWORD` - Admin login password (default: admin123)
+
+## Security Notes
+
+⚠️ **Important**: The admin panel uses a simple password-based authentication stored in environment variables. For production use, consider implementing:
+
+- Proper authentication with JWT tokens
+- Role-based access control
+- Session management
+- Rate limiting
+- HTTPS only
+
+## License
+
+Private - Kedil Project
