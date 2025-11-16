@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 export interface ApiResponse<T = any> {
   success: boolean;
@@ -26,7 +26,7 @@ const createApiClient = (): AxiosInstance => {
   const client = axios.create(API_CONFIG);
 
   client.interceptors.request.use(
-    (config: AxiosRequestConfig) => {
+    (config: InternalAxiosRequestConfig) => {
       const token = typeof window !== 'undefined' 
         ? localStorage.getItem('admin_token') 
         : null;
