@@ -13,6 +13,7 @@ import { formatDate } from '@/lib/utils';
 import { Plus, Trash2, RefreshCw, X, MoreVertical, GripVertical, Edit, Image as ImageIcon } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { BankMaster } from '@/types';
+import Image from 'next/image';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -86,7 +87,7 @@ export default function BankMasterPage() {
     });
     // Set preview from existing image
     if (bank.imageUrl) {
-      setImagePreview(`${API_BASE_URL}${bank.imageUrl}`);
+      setImagePreview(API_BASE_URL + bank.imageUrl);
     } else {
       setImagePreview(null);
     }
@@ -128,8 +129,9 @@ export default function BankMasterPage() {
   };
 
   const getImageUrl = (bank: BankMaster): string | undefined => {
+    console.log(API_BASE_URL + bank.imageUrl , 'bank.imageUrl');
     if (bank.imageUrl) {
-      return `${API_BASE_URL}${bank.imageUrl}`;
+      return API_BASE_URL + bank.imageUrl;
     }
     return undefined;
   };
@@ -403,7 +405,9 @@ export default function BankMasterPage() {
                         <TableCell>
                           {getImageUrl(bank) ? (
                             <div className="relative h-10 w-10 rounded border border-[var(--border)] overflow-hidden bg-[var(--muted)] flex items-center justify-center">
-                              <img
+                              <Image
+                                width={40}
+                                height={40}
                                 src={getImageUrl(bank) || ''}
                                 alt={bank.name}
                                 className="h-full w-full object-contain"
