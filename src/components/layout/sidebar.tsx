@@ -10,7 +10,8 @@ import {
   BarChart3, 
   LogOut,
   LayoutDashboard,
-  FolderKanban
+  FolderKanban,
+  Image
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Bank Master', href: '/bank-master', icon: Building2 },
   { name: 'Groups', href: '/groups', icon: FolderKanban },
   { name: 'Categories', href: '/categories', icon: FolderTree },
+  { name: 'Icons', href: '/icons', icon: Image },
   { name: 'Analysis', href: '/analysis', icon: BarChart3 },
 ];
 

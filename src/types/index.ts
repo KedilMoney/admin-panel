@@ -89,3 +89,17 @@ export interface DashboardData {
   };
 }
 
+export interface Icon {
+  id: string;
+  slug: string;
+  imageUrl?: string;
+  blob_image?: string;
+  searchTags?: string[];
+  tags?: string; // Comma-separated tags for display
+  isGlobal?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
