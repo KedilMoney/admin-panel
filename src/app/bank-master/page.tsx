@@ -14,6 +14,8 @@ import { Plus, Trash2, RefreshCw, X, MoreVertical, GripVertical, Edit, Image as 
 import { useState, useRef } from 'react';
 import { BankMaster } from '@/types';
 import Image from 'next/image';
+import { MigrateBankDialog } from './components/migrate-bank-dialog';
+import { bankMasterApi } from '@/lib/api/bankMaster';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -34,6 +36,9 @@ export default function BankMasterPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
+  const [bankToDelete, setBankToDelete] = useState<BankMaster | null>(null);
+  const [accountsCount, setAccountsCount] = useState(0);
 
   const resetForm = () => {
     setFormData({ name: '', shortName: '', slug: '' });
@@ -119,12 +124,46 @@ export default function BankMasterPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('Are you sure you want to delete this bank?')) {
-      try {
-        await deleteBank.mutateAsync(id);
-      } catch (error) {
-        console.error('Error deleting bank:', error);
+    try {
+      // Check if bank has associated accounts
+      const count = await bankMasterApi.getAccountsCount(id);
+      const bank = banks?.find((b) => b.id === id);
+
+      if (count > 0 && bank) {
+        // Show migration dialog if accounts exist
+        setAccountsCount(count);
+        setBankToDelete(bank);
+        setMigrationDialogOpen(true);
+      } else {
+        // No accounts, proceed with direct deletion
+        if (confirm('Are you sure you want to delete this bank?')) {
+          await deleteBank.mutateAsync({ id });
+        }
       }
+    } catch (error: any) {
+      console.error('Error checking accounts count:', error);
+      // If we can't check, proceed with regular deletion attempt
+      if (confirm('Are you sure you want to delete this bank?')) {
+        try {
+          await deleteBank.mutateAsync({ id });
+        } catch (deleteError) {
+          console.error('Error deleting bank:', deleteError);
+        }
+      }
+    }
+  };
+
+  const handleDeleteWithMigration = async (migrateToBankId: number) => {
+    if (!bankToDelete) return;
+
+    try {
+      await deleteBank.mutateAsync({ id: bankToDelete.id, migrateToBankId });
+      setMigrationDialogOpen(false);
+      setBankToDelete(null);
+      setAccountsCount(0);
+    } catch (error) {
+      // Error will be shown in the dialog
+      throw error;
     }
   };
 
@@ -405,7 +444,7 @@ export default function BankMasterPage() {
                         <TableCell>
                           {getImageUrl(bank) ? (
                             <div className="relative h-10 w-10 rounded border border-[var(--border)] overflow-hidden bg-[var(--muted)] flex items-center justify-center">
-                              <Image
+                              <img
                                 width={40}
                                 height={40}
                                 src={getImageUrl(bank) || ''}
@@ -512,6 +551,17 @@ export default function BankMasterPage() {
               </Table>
             </CardContent>
           </Card>
+
+          {/* Migration Dialog */}
+          <MigrateBankDialog
+            open={migrationDialogOpen}
+            onOpenChange={setMigrationDialogOpen}
+            bankToDelete={bankToDelete}
+            availableBanks={banks || []}
+            accountsCount={accountsCount}
+            onConfirm={handleDeleteWithMigration}
+            isDeleting={deleteBank.isPending}
+          />
         </div>
       </AdminLayout>
     </AuthGuard>

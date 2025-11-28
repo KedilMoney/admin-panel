@@ -43,7 +43,8 @@ export const useDeleteBank = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: number) => bankMasterApi.delete(id),
+    mutationFn: ({ id, migrateToBankId }: { id: number; migrateToBankId?: number }) => 
+      bankMasterApi.delete(id, migrateToBankId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['banks'] });
     },

@@ -31,8 +31,14 @@ export const bankMasterApi = {
     return response.data.data.bank;
   },
 
-  delete: async (id: number): Promise<BankMaster> => {
-    const response = await api.delete<{ bank: BankMaster }>(`/api/bank-master/delete/${id}`);
+  getAccountsCount: async (id: number): Promise<number> => {
+    const response = await api.get<{ accountsCount: number }>(`/api/bank-master/${id}/accounts-count`);
+    return response.data.data.accountsCount;
+  },
+
+  delete: async (id: number, migrateToBankId?: number): Promise<BankMaster> => {
+    const params = migrateToBankId ? { params: { migrateToBankId } } : {};
+    const response = await api.delete<{ bank: BankMaster }>(`/api/bank-master/delete/${id}`, params);
     return response.data.data.bank;
   },
 };
