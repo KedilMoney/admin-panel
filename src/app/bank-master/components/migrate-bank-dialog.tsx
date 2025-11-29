@@ -99,7 +99,7 @@ export function MigrateBankDialog({
               }}
               disabled={isDeleting}
             >
-              <SelectTrigger id="target-bank">
+              <SelectTrigger>
                 <SelectValue placeholder="Choose a bank to migrate accounts to..." />
               </SelectTrigger>
               <SelectContent>
