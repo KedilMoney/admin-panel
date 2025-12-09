@@ -72,6 +72,8 @@ export default function BankMasterPage() {
       if (formData.shortName) formDataToSend.append('shortName', formData.shortName);
       if (formData.slug) formDataToSend.append('slug', formData.slug);
       if (imageFile) formDataToSend.append('blob_image', imageFile);
+      //isGlobal
+      formDataToSend.append('isGlobal', 'true');
 
       await createBank.mutateAsync(formDataToSend);
       setShowCreateForm(false);
@@ -168,7 +170,7 @@ export default function BankMasterPage() {
   };
 
   const getImageUrl = (bank: BankMaster): string | undefined => {
-    console.log(API_BASE_URL + bank.imageUrl , 'bank.imageUrl');
+    console.log(API_BASE_URL + bank.imageUrl, 'bank.imageUrl');
     if (bank.imageUrl) {
       return API_BASE_URL + bank.imageUrl;
     }
