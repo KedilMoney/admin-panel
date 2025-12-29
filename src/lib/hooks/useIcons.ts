@@ -6,6 +6,10 @@ export const useIcons = (search?: string) => {
   return useQuery({
     queryKey: ['icons', search],
     queryFn: () => iconsApi.getAll(search),
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    gcTime: 300000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: false, // Don't refetch on mount if data exists
   });
 };
 

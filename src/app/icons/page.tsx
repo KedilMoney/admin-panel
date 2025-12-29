@@ -11,14 +11,36 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 import { Plus, Trash2, RefreshCw, X, Edit, Image as ImageIcon, Search, Tag } from 'lucide-react';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { Icon } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function IconsPage() {
   const [searchQuery, setSearchQuery] = useState('');
-  const { data: icons, isLoading, error, refetch } = useIcons(searchQuery);
+  const debouncedSearchQuery = useDebounce(searchQuery, 400); // 400ms debounce for API calls
+  
+  // Use debounced search for API calls, but keep all icons for client-side filtering
+  const { data: iconsData, isLoading, error, refetch } = useIcons(debouncedSearchQuery.trim() || undefined);
+  const icons = Array.isArray(iconsData) ? iconsData : [];
+  
   const createIcon = useCreateIcon();
   const updateIcon = useUpdateIcon();
   const deleteIcon = useDeleteIcon();
@@ -33,16 +55,16 @@ export default function IconsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({ slug: '', tags: '' });
     setImageFile(null);
     setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, []);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
@@ -53,7 +75,7 @@ export default function IconsPage() {
       };
       reader.readAsDataURL(file);
     }
-  };
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +129,7 @@ export default function IconsPage() {
     }
   };
 
-  const handleEditClick = (icon: Icon) => {
+  const handleEditClick = useCallback((icon: Icon) => {
     setEditingIcon(icon);
     setFormData({ 
       slug: icon.slug || '',
@@ -121,9 +143,9 @@ export default function IconsPage() {
     }
     setImageFile(null);
     setShowCreateForm(false);
-  };
+  }, []);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (confirm('Are you sure you want to delete this icon? This action cannot be undone.')) {
       try {
         await deleteIcon.mutateAsync(id);
@@ -131,30 +153,40 @@ export default function IconsPage() {
         console.error('Error deleting icon:', error);
       }
     }
-  };
+  }, [deleteIcon]);
 
-  const getImageUrl = (icon: Icon): string | undefined => {
+  const getImageUrl = useCallback((icon: Icon): string | undefined => {
     if (icon.imageUrl) {
       return `${API_BASE_URL}${icon.imageUrl}`;
     }
     return undefined;
-  };
+  }, []);
 
-  // Filter icons based on search query
+  // Client-side filtering for immediate feedback (only when search query is different from debounced)
   const filteredIcons = useMemo(() => {
-    if (!icons) return [];
-    if (!searchQuery.trim()) return icons;
+    if (!icons || icons.length === 0) return [];
     
-    const query = searchQuery.toLowerCase();
-    return icons.filter(icon => {
-      const slugMatch = icon.slug?.toLowerCase().includes(query);
-      const tagsMatch = icon.tags?.toLowerCase().includes(query) || 
-                       icon.searchTags?.some(tag => tag.toLowerCase().includes(query));
-      return slugMatch || tagsMatch;
-    });
-  }, [icons, searchQuery]);
+    // If search query matches debounced query, use API results directly
+    // Otherwise, do client-side filtering for immediate feedback
+    const query = searchQuery.trim().toLowerCase();
+    
+    if (!query) return icons;
+    
+    // If we're still waiting for debounced query, do client-side filtering
+    if (searchQuery !== debouncedSearchQuery) {
+      return icons.filter(icon => {
+        const slugMatch = icon.slug?.toLowerCase().includes(query);
+        const tagsMatch = icon.tags?.toLowerCase().includes(query) || 
+                         icon.searchTags?.some(tag => tag.toLowerCase().includes(query));
+        return slugMatch || tagsMatch;
+      });
+    }
+    
+    // Use API results when debounced query matches
+    return icons;
+  }, [icons, searchQuery, debouncedSearchQuery]);
 
-  if (isLoading) {
+  if (isLoading && !icons.length) {
     return (
       <AuthGuard>
         <AdminLayout>
@@ -203,6 +235,11 @@ export default function IconsPage() {
                   className="pl-10"
                 />
               </div>
+              {searchQuery !== debouncedSearchQuery && (
+                <p className="text-xs text-[var(--muted-foreground)] mt-2">
+                  Searching...
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -538,4 +575,3 @@ export default function IconsPage() {
     </AuthGuard>
   );
 }
-
