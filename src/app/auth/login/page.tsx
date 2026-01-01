@@ -33,9 +33,25 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Admin Login</CardTitle>
-          <CardDescription>Enter your email and password to access the admin panel</CardDescription>
+        <CardHeader className="text-center space-y-4">
+          {/* Logo Section - Centered */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            {/* Logo Icon - Yellow bucket with green icon inside */}
+            <div className="relative">
+              {/* Yellow bucket/container */}
+              <div className="w-10 h-10 bg-yellow-400 rounded-lg flex items-center justify-center">
+                {/* Green circular icon inside */}
+                <div className="w-6 h-6 bg-green-500 rounded-full"></div>
+              </div>
+            </div>
+            {/* Kedil Text */}
+            <span className="text-2xl font-bold text-gray-900">Kedil</span>
+          </div>
+          
+          <div className="space-y-2">
+            <CardTitle className="text-2xl font-bold text-gray-900">Login to your account</CardTitle>
+            <CardDescription>Enter your email and password to access the admin panel</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
