@@ -17,7 +17,7 @@ A comprehensive admin panel for managing the Kedil financial management system. 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Backend API running (default: http://localhost:8080)
+- Backend API running (default: https://api.kedil.money)
 
 ### Installation
 
@@ -28,7 +28,7 @@ npm install
 
 2. Create a `.env.local` file (or copy from `.env.example`):
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8080
+NEXT_PUBLIC_API_URL=https://api.kedil.money
 NEXT_PUBLIC_ADMIN_PASSWORD=admin123
 ```
 
@@ -126,7 +126,7 @@ npm start
 
 ### Environment Variables
 
-- `NEXT_PUBLIC_API_URL` - Backend API URL (default: http://localhost:8080)
+- `NEXT_PUBLIC_API_URL` - Backend API URL (default: https://api.kedil.money)
 - `NEXT_PUBLIC_ADMIN_PASSWORD` - Admin login password (default: admin123)
 
 ## Security Notes

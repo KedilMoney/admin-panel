@@ -14,7 +14,7 @@ export interface ApiError {
 }
 
 const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money',
   timeout: 30000,
   withCredentials: true, // Include cookies for CORS
   headers: {

@@ -14,7 +14,7 @@ import { Plus, Trash2, RefreshCw, X, MoreVertical, GripVertical, Edit, Image as 
 import { useState, useRef } from 'react';
 import { Group } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money';
 
 export default function GroupsPage() {
   const { data: groups, isLoading, error, refetch } = useGroups();

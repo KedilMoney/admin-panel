@@ -17,7 +17,7 @@ import Image from 'next/image';
 import { MigrateBankDialog } from './components/migrate-bank-dialog';
 import { bankMasterApi } from '@/lib/api/bankMaster';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money';
 
 export default function BankMasterPage() {
   const { data: banks, isLoading, error, refetch } = useBanks();

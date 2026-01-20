@@ -14,7 +14,7 @@ import { Plus, Trash2, RefreshCw, X, Edit, Image as ImageIcon, GripVertical, Mor
 import { useState, useRef } from 'react';
 import { Category } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money';
 
 export default function CategoriesPage() {
   const { data: categoriesData, isLoading, error, refetch } = useCategories();

@@ -14,7 +14,7 @@ import { Plus, Trash2, RefreshCw, X, Edit, Image as ImageIcon, Search, Tag } fro
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { Icon } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money';
 
 // Debounce hook for search optimization
 function useDebounce<T>(value: T, delay: number): T {
