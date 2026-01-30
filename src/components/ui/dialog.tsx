@@ -5,6 +5,8 @@ interface DialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   children: React.ReactNode
+  /** Optional class for the content wrapper (e.g. max-w-2xl for wider modals) */
+  contentWrapperClassName?: string
 }
 
 interface DialogContentProps {
@@ -31,7 +33,7 @@ interface DialogFooterProps {
   children: React.ReactNode
 }
 
-const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
+const Dialog = ({ open, onOpenChange, children, contentWrapperClassName }: DialogProps) => {
   React.useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -55,7 +57,7 @@ const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
         aria-hidden="true"
       />
       <div
-        className="relative z-50 w-full max-w-lg mx-4"
+        className={cn("relative z-50 w-full max-w-lg mx-4", contentWrapperClassName)}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
