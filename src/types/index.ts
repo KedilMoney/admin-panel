@@ -92,6 +92,7 @@ export interface DashboardData {
 export interface Icon {
   id: string;
   slug: string;
+  groupTitle?: string;
   imageUrl?: string;
   blob_image?: string;
   searchTags?: string[];
