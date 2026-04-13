@@ -6,7 +6,7 @@ import { useUsers } from '@/lib/hooks/useUsers';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import { Eye, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { useUserByEmail } from '@/lib/hooks/useUsers';
@@ -75,6 +75,7 @@ export default function UsersPage() {
                     <TableHead>Name</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Created At</TableHead>
+                    <TableHead>Last Login</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -91,6 +92,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell>{user.phone || '-'}</TableCell>
                         <TableCell>{user.createdAt ? formatDate(user.createdAt) : '-'}</TableCell>
+                        <TableCell>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : '-'}</TableCell>
                         <TableCell>
                           <Button
                             variant="ghost"
@@ -105,7 +107,7 @@ export default function UsersPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-gray-500">
+                      <TableCell colSpan={7} className="text-center text-gray-500">
                         No users found
                       </TableCell>
                     </TableRow>

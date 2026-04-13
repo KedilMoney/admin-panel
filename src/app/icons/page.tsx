@@ -48,6 +48,7 @@ export default function IconsPage() {
   const [editingIcon, setEditingIcon] = useState<Icon | null>(null);
   const [formData, setFormData] = useState({
     slug: '',
+    groupTitle: '',
     tags: '',
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -56,7 +57,7 @@ export default function IconsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = useCallback(() => {
-    setFormData({ slug: '', tags: '' });
+    setFormData({ slug: '', groupTitle: '', tags: '' });
     setImageFile(null);
     setImagePreview(null);
     if (fileInputRef.current) {
@@ -84,6 +85,7 @@ export default function IconsPage() {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('slug', formData.slug.trim());
+      formDataToSend.append('groupTitle', formData.groupTitle.trim());
       if (formData.tags.trim()) {
         formDataToSend.append('tags', formData.tags.trim());
       }
@@ -109,6 +111,7 @@ export default function IconsPage() {
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('slug', formData.slug.trim());
+      formDataToSend.append('groupTitle', formData.groupTitle.trim());
       if (formData.tags.trim()) {
         formDataToSend.append('tags', formData.tags.trim());
       }
@@ -133,6 +136,7 @@ export default function IconsPage() {
     setEditingIcon(icon);
     setFormData({ 
       slug: icon.slug || '',
+      groupTitle: icon.groupTitle || '',
       tags: icon.tags || (icon.searchTags ? icon.searchTags.join(', ') : '')
     });
     // Set preview from existing image
@@ -176,9 +180,10 @@ export default function IconsPage() {
     if (searchQuery !== debouncedSearchQuery) {
       return icons.filter(icon => {
         const slugMatch = icon.slug?.toLowerCase().includes(query);
+        const groupTitleMatch = icon.groupTitle?.toLowerCase().includes(query);
         const tagsMatch = icon.tags?.toLowerCase().includes(query) || 
                          icon.searchTags?.some(tag => tag.toLowerCase().includes(query));
-        return slugMatch || tagsMatch;
+        return slugMatch || groupTitleMatch || tagsMatch;
       });
     }
     
@@ -287,6 +292,19 @@ export default function IconsPage() {
                     </p>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="groupTitle">Group Title</Label>
+                    <Input
+                      id="groupTitle"
+                      value={formData.groupTitle}
+                      onChange={(e) => setFormData({ ...formData, groupTitle: e.target.value })}
+                      placeholder="e.g., Work & Career, Sport, Health"
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      Subtitle shown above this icon group in budget setup
+                    </p>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="image">Icon Image *</Label>
                     <div className="space-y-3">
                       <Input
@@ -375,6 +393,19 @@ export default function IconsPage() {
                     </p>
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="edit-groupTitle">Group Title</Label>
+                    <Input
+                      id="edit-groupTitle"
+                      value={formData.groupTitle}
+                      onChange={(e) => setFormData({ ...formData, groupTitle: e.target.value })}
+                      placeholder="e.g., Work & Career, Sport, Health"
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      Subtitle shown above this icon group in budget setup
+                    </p>
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="edit-image">Icon Image</Label>
                     <div className="space-y-3">
                       <Input
@@ -446,6 +477,7 @@ export default function IconsPage() {
                   <TableRow>
                     <TableHead className="w-24">Icon</TableHead>
                     <TableHead>Slug</TableHead>
+                    <TableHead>Group Title</TableHead>
                     <TableHead>Tags</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created At</TableHead>
@@ -481,6 +513,11 @@ export default function IconsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="font-semibold text-[var(--foreground)] font-mono text-sm">{icon.slug}</div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-[var(--foreground)]">
+                            {icon.groupTitle?.trim() || 'More'}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
@@ -546,7 +583,7 @@ export default function IconsPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12">
+                      <TableCell colSpan={8} className="text-center py-12">
                         <div className="flex flex-col items-center gap-2">
                           <p className="text-[var(--muted-foreground)]">
                             {searchQuery ? 'No icons found matching your search' : 'No icons found'}
