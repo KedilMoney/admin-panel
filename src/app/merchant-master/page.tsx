@@ -1,9 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import axios from 'axios';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { useMerchantMaster } from '@/lib/hooks/useMerchantMaster';
+import { useMerchantMaster, useUpdateMerchantMaster } from '@/lib/hooks/useMerchantMaster';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -16,9 +17,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RefreshCw, Store, Regex, Layers } from 'lucide-react';
-import type { MerchantMasterRuleType } from '@/types';
+import { RefreshCw, Store, Regex, Layers, Plus, Pencil, Trash2 } from 'lucide-react';
+import type {
+  MerchantMasterNamePatternRule,
+  MerchantMasterRuleType,
+  MerchantMasterUpiRule,
+} from '@/types';
 import { cn } from '@/lib/utils';
+import {
+  MerchantMasterRuleDialog,
+  type RuleDialogKind,
+} from '@/components/merchant-master/merchant-master-rule-dialog';
 
 const TYPE_FILTER_ALL = '__all__';
 const CATEGORY_FILTER_ALL = '__all__';
@@ -31,12 +40,53 @@ const typeBadgeVariant = (type: MerchantMasterRuleType) => {
 
 type TabKey = 'upi' | 'patterns';
 
+function formatApiError(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const msg = err.response?.data?.message;
+    return typeof msg === 'string' ? msg : err.message;
+  }
+  if (err instanceof Error) return err.message;
+  return 'Something went wrong.';
+}
+
+function findUpiIndex(rows: MerchantMasterUpiRule[], row: MerchantMasterUpiRule) {
+  return rows.findIndex(
+    (r) =>
+      r.match === row.match &&
+      r.systemCategoryName === row.systemCategoryName &&
+      r.type === row.type
+  );
+}
+
+function findPatternIndex(
+  rows: MerchantMasterNamePatternRule[],
+  row: MerchantMasterNamePatternRule
+) {
+  return rows.findIndex(
+    (r) =>
+      r.pattern === row.pattern &&
+      r.systemCategoryName === row.systemCategoryName &&
+      r.type === row.type
+  );
+}
+
 export default function MerchantMasterPage() {
   const { data, isLoading, error, refetch, isFetching } = useMerchantMaster();
+  const updateMutation = useUpdateMerchantMaster();
   const [tab, setTab] = useState<TabKey>('upi');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>(TYPE_FILTER_ALL);
   const [categoryFilter, setCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [dialogKind, setDialogKind] = useState<RuleDialogKind>('upi');
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [dialogInitial, setDialogInitial] = useState<{
+    primary: string;
+    systemCategoryName: string;
+    type: MerchantMasterRuleType;
+  } | null>(null);
 
   const categories = useMemo(() => {
     if (!data) return [];
@@ -78,6 +128,121 @@ export default function MerchantMasterPage() {
     });
   }, [data, search, typeFilter, categoryFilter]);
 
+  const openCreate = useCallback(() => {
+    setDialogMode('create');
+    setEditIndex(null);
+    setDialogInitial(null);
+    setDialogKind(tab === 'upi' ? 'upi' : 'pattern');
+    updateMutation.reset();
+    setDialogOpen(true);
+  }, [tab, updateMutation]);
+
+  const openEditUpi = useCallback(
+    (row: MerchantMasterUpiRule) => {
+      if (!data) return;
+      const idx = findUpiIndex(data.upiSubstrings, row);
+      setDialogMode('edit');
+      setDialogKind('upi');
+      setEditIndex(idx);
+      setDialogInitial({
+        primary: row.match,
+        systemCategoryName: row.systemCategoryName,
+        type: row.type,
+      });
+      updateMutation.reset();
+      setDialogOpen(true);
+    },
+    [data, updateMutation]
+  );
+
+  const openEditPattern = useCallback(
+    (row: MerchantMasterNamePatternRule) => {
+      if (!data) return;
+      const idx = findPatternIndex(data.namePatterns, row);
+      setDialogMode('edit');
+      setDialogKind('pattern');
+      setEditIndex(idx);
+      setDialogInitial({
+        primary: row.pattern,
+        systemCategoryName: row.systemCategoryName,
+        type: row.type,
+      });
+      updateMutation.reset();
+      setDialogOpen(true);
+    },
+    [data, updateMutation]
+  );
+
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setDialogOpen(open);
+      if (!open) updateMutation.reset();
+    },
+    [updateMutation]
+  );
+
+  const handleDialogSubmit = useCallback(
+    (values: { primary: string; systemCategoryName: string; type: MerchantMasterRuleType }) => {
+      if (!data) return;
+      const upiSubstrings = [...data.upiSubstrings];
+      const namePatterns = [...data.namePatterns];
+
+      if (dialogKind === 'upi') {
+        const row: MerchantMasterUpiRule = {
+          match: values.primary,
+          systemCategoryName: values.systemCategoryName,
+          type: values.type,
+        };
+        if (dialogMode === 'edit' && editIndex !== null && editIndex >= 0) {
+          upiSubstrings[editIndex] = row;
+        } else {
+          upiSubstrings.push(row);
+        }
+      } else {
+        const row: MerchantMasterNamePatternRule = {
+          pattern: values.primary,
+          systemCategoryName: values.systemCategoryName,
+          type: values.type,
+        };
+        if (dialogMode === 'edit' && editIndex !== null && editIndex >= 0) {
+          namePatterns[editIndex] = row;
+        } else {
+          namePatterns.push(row);
+        }
+      }
+
+      updateMutation.mutate(
+        { upiSubstrings, namePatterns },
+        { onSuccess: () => setDialogOpen(false) }
+      );
+    },
+    [data, dialogKind, dialogMode, editIndex, updateMutation]
+  );
+
+  const deleteUpi = useCallback(
+    (row: MerchantMasterUpiRule) => {
+      if (!data) return;
+      if (typeof window !== 'undefined' && !window.confirm('Delete this UPI substring rule?')) return;
+      const idx = findUpiIndex(data.upiSubstrings, row);
+      if (idx < 0) return;
+      const upiSubstrings = data.upiSubstrings.filter((_, i) => i !== idx);
+      updateMutation.mutate({ upiSubstrings, namePatterns: data.namePatterns });
+    },
+    [data, updateMutation]
+  );
+
+  const deletePattern = useCallback(
+    (row: MerchantMasterNamePatternRule) => {
+      if (!data) return;
+      if (typeof window !== 'undefined' && !window.confirm('Delete this name pattern rule?')) return;
+      const idx = findPatternIndex(data.namePatterns, row);
+      if (idx < 0) return;
+      const namePatterns = data.namePatterns.filter((_, i) => i !== idx);
+      updateMutation.mutate({ upiSubstrings: data.upiSubstrings, namePatterns });
+    },
+    [data, updateMutation]
+  );
+
   if (isLoading) {
     return (
       <AuthGuard>
@@ -109,35 +274,68 @@ export default function MerchantMasterPage() {
   }
 
   const { meta } = data;
+  const saveError =
+    updateMutation.isError && !dialogOpen ? formatApiError(updateMutation.error) : null;
 
   return (
     <AuthGuard>
       <AdminLayout>
         <div className="space-y-6">
+          <MerchantMasterRuleDialog
+            open={dialogOpen}
+            onOpenChange={handleDialogOpenChange}
+            mode={dialogMode}
+            kind={dialogKind}
+            initial={dialogInitial}
+            categories={categories}
+            isSubmitting={updateMutation.isPending}
+            errorMessage={
+              updateMutation.isError ? formatApiError(updateMutation.error) : null
+            }
+            onSubmit={handleDialogSubmit}
+          />
+
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">
                 Merchant master
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                Live rules from the API (<code className="rounded bg-[var(--accent)] px-1 py-0.5 text-xs">{meta.source}</code>
-                ). Deploy a backend change to update this view — refresh or revisit the page to pull the latest.
+                Rules used for Phase A auto-categorization (
+                <code className="rounded bg-[var(--accent)] px-1 py-0.5 text-xs">{meta.source}</code>
+                ). Edits are saved to the API and apply to new categorization runs (cached briefly on the
+                server).
               </p>
               <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-                Dataset last updated: <span className="font-medium text-[var(--foreground)]">{meta.lastUpdated}</span>
+                Dataset last updated:{' '}
+                <span className="font-medium text-[var(--foreground)]">{meta.lastUpdated}</span>
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="shrink-0"
-            >
-              <RefreshCw className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
-              Refresh
-            </Button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button variant="default" size="sm" onClick={openCreate} disabled={updateMutation.isPending}>
+                <Plus className="mr-2 h-4 w-4" />
+                {tab === 'upi' ? 'Add UPI rule' : 'Add pattern'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isFetching}
+              >
+                <RefreshCw className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
+                Refresh
+              </Button>
+            </div>
           </div>
+
+          {saveError && (
+            <div
+              className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-800 dark:text-red-200"
+              role="alert"
+            >
+              {saveError}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
@@ -186,7 +384,7 @@ export default function MerchantMasterPage() {
             <CardHeader>
               <CardTitle>Explore rules</CardTitle>
               <CardDescription>
-                Filter and search. UPI rules use plain substrings; name rules use case-insensitive regex.
+                Filter and search. Create, edit, or delete rows; changes persist via PUT to the admin API.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -274,14 +472,15 @@ export default function MerchantMasterPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[32%]">UPI substring</TableHead>
+                        <TableHead className="w-[28%]">UPI substring</TableHead>
                         <TableHead>System category</TableHead>
-                        <TableHead className="w-[120px]">Type</TableHead>
+                        <TableHead className="w-[100px]">Type</TableHead>
+                        <TableHead className="w-[120px] text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredUpi.map((row, idx) => (
-                        <TableRow key={`upi-${idx}-${row.match}-${row.systemCategoryName}`}>
+                      {filteredUpi.map((row) => (
+                        <TableRow key={`upi-${row.match}-${row.systemCategoryName}-${row.type}`}>
                           <TableCell>
                             <code className="rounded bg-[var(--accent)] px-1.5 py-0.5 text-xs font-mono">
                               {row.match}
@@ -290,6 +489,32 @@ export default function MerchantMasterPage() {
                           <TableCell className="text-sm">{row.systemCategoryName}</TableCell>
                           <TableCell>
                             <Badge variant={typeBadgeVariant(row.type)}>{row.type}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="Edit rule"
+                                onClick={() => openEditUpi(row)}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400"
+                                aria-label="Delete rule"
+                                onClick={() => deleteUpi(row)}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -306,14 +531,17 @@ export default function MerchantMasterPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="min-w-[240px]">Regex pattern</TableHead>
+                        <TableHead className="min-w-[200px]">Regex pattern</TableHead>
                         <TableHead>System category</TableHead>
-                        <TableHead className="w-[120px]">Type</TableHead>
+                        <TableHead className="w-[100px]">Type</TableHead>
+                        <TableHead className="w-[120px] text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredPatterns.map((row, idx) => (
-                        <TableRow key={`${idx}-${row.systemCategoryName}-${row.type}`}>
+                      {filteredPatterns.map((row) => (
+                        <TableRow
+                          key={`pat-${row.pattern.slice(0, 48)}-${row.systemCategoryName}-${row.type}`}
+                        >
                           <TableCell>
                             <pre
                               className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-[var(--border)] bg-[var(--accent)]/40 p-2 font-mono text-[11px] leading-relaxed"
@@ -325,6 +553,32 @@ export default function MerchantMasterPage() {
                           <TableCell className="align-top text-sm">{row.systemCategoryName}</TableCell>
                           <TableCell className="align-top">
                             <Badge variant={typeBadgeVariant(row.type)}>{row.type}</Badge>
+                          </TableCell>
+                          <TableCell className="align-top text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                aria-label="Edit rule"
+                                onClick={() => openEditPattern(row)}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400"
+                                aria-label="Delete rule"
+                                onClick={() => deletePattern(row)}
+                                disabled={updateMutation.isPending}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
