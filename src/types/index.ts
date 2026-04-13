@@ -103,3 +103,28 @@ export interface Icon {
   updated_by?: string;
 }
 
+export type MerchantMasterRuleType = 'Need' | 'Want' | 'Savings';
+
+export interface MerchantMasterUpiRule {
+  match: string;
+  systemCategoryName: string;
+  type: MerchantMasterRuleType;
+}
+
+export interface MerchantMasterNamePatternRule {
+  pattern: string;
+  systemCategoryName: string;
+  type: MerchantMasterRuleType;
+}
+
+export interface MerchantMasterData {
+  meta: {
+    lastUpdated: string;
+    source: string;
+    upiSubstringCount: number;
+    namePatternCount: number;
+  };
+  upiSubstrings: MerchantMasterUpiRule[];
+  namePatterns: MerchantMasterNamePatternRule[];
+}
+

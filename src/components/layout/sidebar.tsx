@@ -12,7 +12,8 @@ import {
   LayoutDashboard,
   FolderKanban,
   Image,
-  Headphones
+  Headphones,
+  Store
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Bank Master', href: '/bank-master', icon: Building2 },
+  { name: 'Merchant Master', href: '/merchant-master', icon: Store },
   { name: 'Groups', href: '/groups', icon: FolderKanban },
   { name: 'Categories', href: '/categories', icon: FolderTree },
   { name: 'Icons', href: '/icons', icon: Image },
