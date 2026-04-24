@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -24,10 +23,36 @@ import {
   useUpdateBudgetTemplate,
 } from '@/lib/hooks/useAdmin';
 import { BudgetTemplateCategoryType, BudgetTemplateGroup } from '@/lib/api/admin';
-import { formatDateTime } from '@/lib/utils';
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 
 const TEMPLATE_TYPE_OPTIONS: BudgetTemplateCategoryType[] = ['need', 'want', 'saving'];
+
+type ApiError = {
+  response?: {
+    data?: {
+      message?: unknown;
+    };
+  };
+  message?: unknown;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error !== 'object' || error === null) {
+    return fallback;
+  }
+
+  const apiError = error as ApiError;
+
+  if (typeof apiError.response?.data?.message === 'string') {
+    return apiError.response.data.message;
+  }
+
+  if (typeof apiError.message === 'string') {
+    return apiError.message;
+  }
+
+  return fallback;
+};
 
 export default function AnalysisPage() {
   const { data: onboardingUsers = [], isLoading: onboardingLoading, refetch: refetchOnboarding } = useAdminOnboarding();
@@ -36,20 +61,23 @@ export default function AnalysisPage() {
   const { data: budgetTemplate = [], isLoading: templateLoading, refetch: refetchTemplate } = useBudgetTemplate();
   const updateTemplate = useUpdateBudgetTemplate();
 
-  const [templateDraft, setTemplateDraft] = useState<BudgetTemplateGroup[]>([]);
+  const [templateDraftOverride, setTemplateDraftOverride] = useState<BudgetTemplateGroup[] | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  useEffect(() => {
-    setTemplateDraft(
-      budgetTemplate.map((group) => ({
-        name: group.name,
-        categories: group.categories.map((category) => ({
-          name: category.name,
-          type: category.type,
-        })),
-      }))
-    );
+  const templateFromApi = useMemo(() => {
+    return budgetTemplate.map((group) => ({
+      name: group.name,
+      categories: group.categories.map((category) => ({
+        name: category.name,
+        type: category.type,
+      })),
+    }));
   }, [budgetTemplate]);
+
+  const templateDraft = templateDraftOverride ?? templateFromApi;
+  const updateTemplateDraft = (updater: (draft: BudgetTemplateGroup[]) => BudgetTemplateGroup[]) => {
+    setTemplateDraftOverride((current) => updater(current ?? templateFromApi));
+  };
 
   const stats = useMemo(() => {
     const total = onboardingUsers.length;
@@ -86,22 +114,22 @@ export default function AnalysisPage() {
   }, [onboardingUsers]);
 
   const hasTemplateChanges = useMemo(
-    () => JSON.stringify(templateDraft) !== JSON.stringify(budgetTemplate),
-    [templateDraft, budgetTemplate]
+    () => JSON.stringify(templateDraft) !== JSON.stringify(templateFromApi),
+    [templateDraft, templateFromApi]
   );
 
   const setGroupName = (groupIndex: number, value: string) => {
-    setTemplateDraft((prev) =>
+    updateTemplateDraft((prev) =>
       prev.map((group, idx) => (idx === groupIndex ? { ...group, name: value } : group))
     );
   };
 
   const removeGroup = (groupIndex: number) => {
-    setTemplateDraft((prev) => prev.filter((_, idx) => idx !== groupIndex));
+    updateTemplateDraft((prev) => prev.filter((_, idx) => idx !== groupIndex));
   };
 
   const addGroup = () => {
-    setTemplateDraft((prev) => [
+    updateTemplateDraft((prev) => [
       ...prev,
       {
         name: `New Group ${prev.length + 1}`,
@@ -111,7 +139,7 @@ export default function AnalysisPage() {
   };
 
   const addCategory = (groupIndex: number) => {
-    setTemplateDraft((prev) =>
+    updateTemplateDraft((prev) =>
       prev.map((group, idx) =>
         idx === groupIndex
           ? {
@@ -124,7 +152,7 @@ export default function AnalysisPage() {
   };
 
   const setCategoryName = (groupIndex: number, categoryIndex: number, value: string) => {
-    setTemplateDraft((prev) =>
+    updateTemplateDraft((prev) =>
       prev.map((group, idx) =>
         idx === groupIndex
           ? {
@@ -143,7 +171,7 @@ export default function AnalysisPage() {
     categoryIndex: number,
     type: BudgetTemplateCategoryType
   ) => {
-    setTemplateDraft((prev) =>
+    updateTemplateDraft((prev) =>
       prev.map((group, idx) =>
         idx === groupIndex
           ? {
@@ -158,7 +186,7 @@ export default function AnalysisPage() {
   };
 
   const removeCategory = (groupIndex: number, categoryIndex: number) => {
-    setTemplateDraft((prev) =>
+    updateTemplateDraft((prev) =>
       prev.map((group, idx) =>
         idx === groupIndex
           ? {
@@ -174,15 +202,16 @@ export default function AnalysisPage() {
     try {
       await updateTemplate.mutateAsync(templateDraft);
       setSaveFeedback({ type: 'success', message: 'Budget template updated successfully.' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setSaveFeedback({
         type: 'error',
-        message: error?.response?.data?.message || error?.message || 'Failed to update template',
+        message: getErrorMessage(error, 'Failed to update template'),
       });
     }
   };
 
   const refreshAll = async () => {
+    setTemplateDraftOverride(null);
     await Promise.all([
       refetchOnboarding(),
       refetchCategoryUsage(),
@@ -253,7 +282,7 @@ export default function AnalysisPage() {
             </Card>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6">
             <Card>
               <CardHeader>
                 <CardTitle>Onboarding Step Completion</CardTitle>
@@ -267,50 +296,6 @@ export default function AnalysisPage() {
                     </div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Onboarding Users</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>Last Login</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Current Step</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {onboardingUsers.slice(0, 10).map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell>
-                          <div className="font-medium">{user.username}</div>
-                          <div className="text-xs text-[var(--muted-foreground)]">{user.email}</div>
-                        </TableCell>
-                        <TableCell>
-                          {user.lastLoginAt ? formatDateTime(user.lastLoginAt) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.completed ? 'default' : user.abandoned ? 'destructive' : 'secondary'}>
-                            {user.completed ? 'Completed' : user.abandoned ? 'Abandoned' : 'In Progress'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{user.currentStep}</TableCell>
-                      </TableRow>
-                    ))}
-                    {onboardingUsers.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-[var(--muted-foreground)]">
-                          No onboarding records found
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
               </CardContent>
             </Card>
           </div>
