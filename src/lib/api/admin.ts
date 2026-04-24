@@ -51,6 +51,15 @@ export interface NameUsageRow {
   totalRecords: number;
 }
 
+export interface SystemCategoryTagRow {
+  categoryName: string;
+  tags: string[];
+}
+
+export interface SystemCategoryTagsPayload {
+  categories: SystemCategoryTagRow[];
+}
+
 export const adminApi = {
   getOnboarding: async (): Promise<AdminOnboardingUser[]> => {
     const response = await api.get<AdminOnboardingUser[]>('/api/admin/onboarding');
@@ -76,6 +85,20 @@ export const adminApi = {
     template: BudgetTemplateGroup[]
   ): Promise<BudgetTemplateGroup[]> => {
     const response = await api.put<BudgetTemplateGroup[]>('/api/admin/budget-template', { template });
+    return response.data.data;
+  },
+
+  getCategoryTags: async (): Promise<SystemCategoryTagsPayload> => {
+    const response = await api.get<SystemCategoryTagsPayload>('/api/admin/category-tags');
+    return response.data.data;
+  },
+
+  updateCategoryTags: async (
+    categories: SystemCategoryTagRow[]
+  ): Promise<SystemCategoryTagsPayload> => {
+    const response = await api.put<SystemCategoryTagsPayload>('/api/admin/category-tags', {
+      categories,
+    });
     return response.data.data;
   },
 };
