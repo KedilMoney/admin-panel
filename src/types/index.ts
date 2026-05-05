@@ -131,3 +131,28 @@ export interface MerchantMasterData {
   namePatterns: MerchantMasterNamePatternRule[];
 }
 
+export interface SystemCategoryOption {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface MerchantProfile {
+  id: string;
+  canonicalName: string;
+  upiId?: string | null;
+  accountNumber?: string | null;
+  type: string;
+  confidence: number;
+  verificationLevel: string;
+  seenCount: number;
+  createdAt: string;
+  updatedAt: string;
+  systemCategoryId: string;
+  systemCategory: SystemCategoryOption;
+  _count: {
+    aliases: number;
+    transactions: number;
+  };
+}
+

@@ -1,15 +1,22 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import axios from 'axios';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { useMerchantMaster, useUpdateMerchantMaster } from '@/lib/hooks/useMerchantMaster';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -17,231 +24,183 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RefreshCw, Store, Regex, Layers, Plus, Pencil, Trash2 } from 'lucide-react';
-import type {
-  MerchantMasterNamePatternRule,
-  MerchantMasterRuleType,
-  MerchantMasterUpiRule,
-} from '@/types';
-import { cn } from '@/lib/utils';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  MerchantMasterRuleDialog,
-  type RuleDialogKind,
-} from '@/components/merchant-master/merchant-master-rule-dialog';
+  useCreateMerchantProfile,
+  useMerchantProfiles,
+  useUpdateMerchantProfile,
+} from '@/lib/hooks/useMerchantProfiles';
+import { formatDateTime } from '@/lib/utils';
+import type { MerchantProfile } from '@/types';
+import { Edit, Plus, RefreshCw, Search, Store } from 'lucide-react';
 
-const TYPE_FILTER_ALL = '__all__';
-const CATEGORY_FILTER_ALL = '__all__';
+type MerchantProfileFormState = {
+  canonicalName: string;
+  systemCategoryId: string;
+  upiId: string;
+  accountNumber: string;
+  confidence: string;
+};
 
-const typeBadgeVariant = (type: MerchantMasterRuleType) => {
-  if (type === 'Savings' || type === 'Saving') return 'success' as const;
-  if (type === 'Want') return 'secondary' as const;
+const INITIAL_FORM: MerchantProfileFormState = {
+  canonicalName: '',
+  systemCategoryId: '',
+  upiId: '',
+  accountNumber: '',
+  confidence: '0.95',
+};
+
+const getTypeBadgeVariant = (type: string) => {
+  const normalized = type.toLowerCase();
+  if (normalized === 'need') return 'success' as const;
+  if (normalized === 'want') return 'warning' as const;
+  return 'secondary' as const;
+};
+
+const getVerificationBadgeVariant = (level: string) => {
+  if (level === 'multi_user_confirmed' || level === 'user_confirmed') {
+    return 'success' as const;
+  }
+  if (level === 'llm_high') {
+    return 'secondary' as const;
+  }
   return 'outline' as const;
 };
 
-type TabKey = 'upi' | 'patterns';
+const formatVerificationLevel = (value: string) =>
+  value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 
-function formatApiError(err: unknown): string {
-  if (axios.isAxiosError(err)) {
-    const msg = err.response?.data?.message;
-    return typeof msg === 'string' ? msg : err.message;
+const buildPayload = (form: MerchantProfileFormState) => ({
+  canonicalName: form.canonicalName.trim(),
+  systemCategoryId: form.systemCategoryId,
+  upiId: form.upiId.trim() || null,
+  accountNumber: form.accountNumber.trim() || null,
+  confidence: Number(form.confidence),
+});
+
+const formatSubmitError = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    return (
+      (typeof error.response?.data?.message === 'string' && error.response.data.message) ||
+      error.message ||
+      'Unable to save merchant profile.'
+    );
   }
-  if (err instanceof Error) return err.message;
-  return 'Something went wrong.';
-}
 
-function findUpiIndex(rows: MerchantMasterUpiRule[], row: MerchantMasterUpiRule) {
-  return rows.findIndex(
-    (r) =>
-      r.match === row.match &&
-      r.systemCategoryName === row.systemCategoryName &&
-      r.type === row.type
-  );
-}
+  if (error instanceof Error) {
+    return error.message;
+  }
 
-function findPatternIndex(
-  rows: MerchantMasterNamePatternRule[],
-  row: MerchantMasterNamePatternRule
-) {
-  return rows.findIndex(
-    (r) =>
-      r.pattern === row.pattern &&
-      r.systemCategoryName === row.systemCategoryName &&
-      r.type === row.type
-  );
-}
+  return 'Unable to save merchant profile.';
+};
 
 export default function MerchantMasterPage() {
-  const { data, isLoading, error, refetch, isFetching } = useMerchantMaster();
-  const updateMutation = useUpdateMerchantMaster();
-  const [tab, setTab] = useState<TabKey>('upi');
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<string>(TYPE_FILTER_ALL);
-  const [categoryFilter, setCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingMerchant, setEditingMerchant] = useState<MerchantProfile | null>(null);
+  const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
+  const [formError, setFormError] = useState('');
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
-  const [dialogKind, setDialogKind] = useState<RuleDialogKind>('upi');
-  const [editIndex, setEditIndex] = useState<number | null>(null);
-  const [dialogInitial, setDialogInitial] = useState<{
-    primary: string;
-    systemCategoryName: string;
-    type: MerchantMasterRuleType;
-  } | null>(null);
+  const { data, isLoading, error, refetch, isFetching } = useMerchantProfiles(searchQuery);
+  const createMerchant = useCreateMerchantProfile();
+  const updateMerchant = useUpdateMerchantProfile();
 
-  const categories = useMemo(() => {
-    if (!data) return [];
-    const set = new Set<string>();
-    data.upiSubstrings.forEach((r) => set.add(r.systemCategoryName));
-    data.namePatterns.forEach((r) => set.add(r.systemCategoryName));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [data]);
+  const merchants = useMemo(() => data?.merchants ?? [], [data]);
+  const systemCategories = useMemo(() => data?.systemCategories ?? [], [data]);
 
-  const filteredUpi = useMemo(() => {
-    if (!data) return [];
-    const q = search.trim().toLowerCase();
-    return data.upiSubstrings.filter((row) => {
-      if (typeFilter !== TYPE_FILTER_ALL && row.type !== typeFilter) return false;
-      if (categoryFilter !== CATEGORY_FILTER_ALL && row.systemCategoryName !== categoryFilter)
-        return false;
-      if (!q) return true;
-      return (
-        row.match.toLowerCase().includes(q) ||
-        row.systemCategoryName.toLowerCase().includes(q) ||
-        row.type.toLowerCase().includes(q)
-      );
+  const summary = useMemo(
+    () => ({
+      total: merchants.length,
+      confirmed: merchants.filter((merchant) =>
+        ['user_confirmed', 'multi_user_confirmed'].includes(merchant.verificationLevel)
+      ).length,
+      withUpi: merchants.filter((merchant) => merchant.upiId).length,
+    }),
+    [merchants]
+  );
+
+  const selectedCategory = useMemo(
+    () => systemCategories.find((category) => category.id === form.systemCategoryId),
+    [form.systemCategoryId, systemCategories]
+  );
+
+  const selectedCategoryLabel = selectedCategory
+    ? `${selectedCategory.name} (${selectedCategory.type})`
+    : undefined;
+
+  const openCreateDialog = () => {
+    setEditingMerchant(null);
+    setForm(INITIAL_FORM);
+    setFormError('');
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (merchant: MerchantProfile) => {
+    setEditingMerchant(merchant);
+    setForm({
+      canonicalName: merchant.canonicalName,
+      systemCategoryId: merchant.systemCategoryId,
+      upiId: merchant.upiId ?? '',
+      accountNumber: merchant.accountNumber ?? '',
+      confidence: String(merchant.confidence ?? 0.95),
     });
-  }, [data, search, typeFilter, categoryFilter]);
+    setFormError('');
+    setIsDialogOpen(true);
+  };
 
-  const filteredPatterns = useMemo(() => {
-    if (!data) return [];
-    const q = search.trim().toLowerCase();
-    return data.namePatterns.filter((row) => {
-      if (typeFilter !== TYPE_FILTER_ALL && row.type !== typeFilter) return false;
-      if (categoryFilter !== CATEGORY_FILTER_ALL && row.systemCategoryName !== categoryFilter)
-        return false;
-      if (!q) return true;
-      return (
-        row.pattern.toLowerCase().includes(q) ||
-        row.systemCategoryName.toLowerCase().includes(q) ||
-        row.type.toLowerCase().includes(q)
-      );
-    });
-  }, [data, search, typeFilter, categoryFilter]);
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setEditingMerchant(null);
+    setForm(INITIAL_FORM);
+    setFormError('');
+  };
 
-  const openCreate = useCallback(() => {
-    setDialogMode('create');
-    setEditIndex(null);
-    setDialogInitial(null);
-    setDialogKind(tab === 'upi' ? 'upi' : 'pattern');
-    updateMutation.reset();
-    setDialogOpen(true);
-  }, [tab, updateMutation]);
+  const handleDialogChange = (open: boolean) => {
+    if (open) {
+      setIsDialogOpen(true);
+      return;
+    }
 
-  const openEditUpi = useCallback(
-    (row: MerchantMasterUpiRule) => {
-      if (!data) return;
-      const idx = findUpiIndex(data.upiSubstrings, row);
-      setDialogMode('edit');
-      setDialogKind('upi');
-      setEditIndex(idx);
-      setDialogInitial({
-        primary: row.match,
-        systemCategoryName: row.systemCategoryName,
-        type: row.type,
-      });
-      updateMutation.reset();
-      setDialogOpen(true);
-    },
-    [data, updateMutation]
-  );
+    closeDialog();
+  };
 
-  const openEditPattern = useCallback(
-    (row: MerchantMasterNamePatternRule) => {
-      if (!data) return;
-      const idx = findPatternIndex(data.namePatterns, row);
-      setDialogMode('edit');
-      setDialogKind('pattern');
-      setEditIndex(idx);
-      setDialogInitial({
-        primary: row.pattern,
-        systemCategoryName: row.systemCategoryName,
-        type: row.type,
-      });
-      updateMutation.reset();
-      setDialogOpen(true);
-    },
-    [data, updateMutation]
-  );
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setFormError('');
 
-  const handleDialogOpenChange = useCallback(
-    (open: boolean) => {
-      setDialogOpen(open);
-      if (!open) updateMutation.reset();
-    },
-    [updateMutation]
-  );
+    if (!form.canonicalName.trim()) {
+      setFormError('Merchant name is required.');
+      return;
+    }
 
-  const handleDialogSubmit = useCallback(
-    (values: { primary: string; systemCategoryName: string; type: MerchantMasterRuleType }) => {
-      if (!data) return;
-      const upiSubstrings = [...data.upiSubstrings];
-      const namePatterns = [...data.namePatterns];
+    if (!form.systemCategoryId) {
+      setFormError('Please choose a system category.');
+      return;
+    }
 
-      if (dialogKind === 'upi') {
-        const row: MerchantMasterUpiRule = {
-          match: values.primary,
-          systemCategoryName: values.systemCategoryName,
-          type: values.type,
-        };
-        if (dialogMode === 'edit' && editIndex !== null && editIndex >= 0) {
-          upiSubstrings[editIndex] = row;
-        } else {
-          upiSubstrings.push(row);
-        }
+    const confidence = Number(form.confidence);
+    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+      setFormError('Confidence must be between 0 and 1.');
+      return;
+    }
+
+    try {
+      if (editingMerchant) {
+        await updateMerchant.mutateAsync({
+          id: editingMerchant.id,
+          payload: buildPayload(form),
+        });
       } else {
-        const row: MerchantMasterNamePatternRule = {
-          pattern: values.primary,
-          systemCategoryName: values.systemCategoryName,
-          type: values.type,
-        };
-        if (dialogMode === 'edit' && editIndex !== null && editIndex >= 0) {
-          namePatterns[editIndex] = row;
-        } else {
-          namePatterns.push(row);
-        }
+        await createMerchant.mutateAsync(buildPayload(form));
       }
-
-      updateMutation.mutate(
-        { upiSubstrings, namePatterns },
-        { onSuccess: () => setDialogOpen(false) }
-      );
-    },
-    [data, dialogKind, dialogMode, editIndex, updateMutation]
-  );
-
-  const deleteUpi = useCallback(
-    (row: MerchantMasterUpiRule) => {
-      if (!data) return;
-      if (typeof window !== 'undefined' && !window.confirm('Delete this UPI substring rule?')) return;
-      const idx = findUpiIndex(data.upiSubstrings, row);
-      if (idx < 0) return;
-      const upiSubstrings = data.upiSubstrings.filter((_, i) => i !== idx);
-      updateMutation.mutate({ upiSubstrings, namePatterns: data.namePatterns });
-    },
-    [data, updateMutation]
-  );
-
-  const deletePattern = useCallback(
-    (row: MerchantMasterNamePatternRule) => {
-      if (!data) return;
-      if (typeof window !== 'undefined' && !window.confirm('Delete this name pattern rule?')) return;
-      const idx = findPatternIndex(data.namePatterns, row);
-      if (idx < 0) return;
-      const namePatterns = data.namePatterns.filter((_, i) => i !== idx);
-      updateMutation.mutate({ upiSubstrings: data.upiSubstrings, namePatterns });
-    },
-    [data, updateMutation]
-  );
+      closeDialog();
+    } catch (submitError: unknown) {
+      setFormError(formatSubmitError(submitError));
+    }
+  };
 
   if (isLoading) {
     return (
@@ -250,7 +209,7 @@ export default function MerchantMasterPage() {
           <div className="flex h-64 items-center justify-center">
             <div className="text-center">
               <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" />
-              <p className="mt-4 text-sm text-[var(--muted-foreground)]">Loading merchant rules…</p>
+              <p className="mt-4 text-[var(--muted-foreground)]">Loading merchant profiles...</p>
             </div>
           </div>
         </AdminLayout>
@@ -258,355 +217,318 @@ export default function MerchantMasterPage() {
     );
   }
 
-  if (error || !data) {
+  if (error) {
     return (
       <AuthGuard>
         <AdminLayout>
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-800 dark:text-red-200">
-            <p className="text-sm">Could not load merchant master data. Check admin access and API URL.</p>
-            <Button onClick={() => refetch()} className="mt-3" size="sm" variant="outline">
-              Retry
-            </Button>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Merchant Profiles</CardTitle>
+              <CardDescription>Unable to load merchant data right now.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => refetch()} size="sm">
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
         </AdminLayout>
       </AuthGuard>
     );
   }
-
-  const { meta } = data;
-  const saveError =
-    updateMutation.isError && !dialogOpen ? formatApiError(updateMutation.error) : null;
 
   return (
     <AuthGuard>
       <AdminLayout>
         <div className="space-y-6">
-          <MerchantMasterRuleDialog
-            open={dialogOpen}
-            onOpenChange={handleDialogOpenChange}
-            mode={dialogMode}
-            kind={dialogKind}
-            initial={dialogInitial}
-            categories={categories}
-            isSubmitting={updateMutation.isPending}
-            errorMessage={
-              updateMutation.isError ? formatApiError(updateMutation.error) : null
-            }
-            onSubmit={handleDialogSubmit}
-          />
-
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-[var(--foreground)]">
-                Merchant master
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                Rules used for Phase A auto-categorization (
-                <code className="rounded bg-[var(--accent)] px-1 py-0.5 text-xs">{meta.source}</code>
-                ). Edits are saved to the API and apply to new categorization runs (cached briefly on the
-                server).
+              <h1 className="text-3xl font-bold text-[var(--foreground)]">Merchant Profiles</h1>
+              <p className="mt-2 text-[var(--muted-foreground)]">
+                Manage canonical merchant names and their auto-categorization mapping from the
+                database.
               </p>
-              <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-                Dataset last updated:{' '}
-                <span className="font-medium text-[var(--foreground)]">{meta.lastUpdated}</span>
-              </p>
-              {meta.serverAutoTrainingEnabled === true && (
-                <p className="mt-2 max-w-2xl text-xs text-[var(--muted-foreground)]">
-                  Server auto-training is enabled: after high-confidence LLM categorization, new UPI
-                  substring or name-pattern rules can be appended here automatically (refresh to see
-                  updates). Disable on the API with{' '}
-                  <code className="rounded bg-[var(--accent)] px-1 py-0.5 font-mono text-[11px]">
-                    AUTO_LEARN_MERCHANT_MASTER=0
-                  </code>
-                  .
-                </p>
-              )}
             </div>
-            <div className="flex shrink-0 flex-wrap gap-2">
-              <Button variant="default" size="sm" onClick={openCreate} disabled={updateMutation.isPending}>
-                <Plus className="mr-2 h-4 w-4" />
-                {tab === 'upi' ? 'Add UPI rule' : 'Add pattern'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isFetching}
-              >
-                <RefreshCw className={cn('mr-2 h-4 w-4', isFetching && 'animate-spin')} />
+            <div className="flex gap-2">
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
                 Refresh
+              </Button>
+              <Button onClick={openCreateDialog} size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Merchant
               </Button>
             </div>
           </div>
 
-          {saveError && (
-            <div
-              className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-800 dark:text-red-200"
-              role="alert"
-            >
-              {saveError}
-            </div>
-          )}
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">UPI substring rules</CardTitle>
-                <Store className="h-4 w-4 text-[var(--muted-foreground)]" />
+              <CardHeader className="pb-2">
+                <CardDescription>Total merchant profiles</CardDescription>
+                <CardTitle className="text-3xl">{summary.total}</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{meta.upiSubstringCount}</div>
-                <p className="text-xs text-[var(--muted-foreground)]">VPA / narration substrings</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Name pattern rules</CardTitle>
-                <Regex className="h-4 w-4 text-[var(--muted-foreground)]" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{meta.namePatternCount}</div>
-                <p className="text-xs text-[var(--muted-foreground)]">Regex on description / beneficiary</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Categories in use</CardTitle>
-                <Layers className="h-4 w-4 text-[var(--muted-foreground)]" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{categories.length}</div>
-                <p className="text-xs text-[var(--muted-foreground)]">Distinct system categories</p>
-              </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Need / Want / Saving</CardTitle>
+                <CardDescription>Confirmed mappings</CardDescription>
+                <CardTitle className="text-3xl">{summary.confirmed}</CardTitle>
               </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Badge variant="outline">Need</Badge>
-                <Badge variant="secondary">Want</Badge>
-                <Badge variant="success">Saving</Badge>
-                <Badge variant="success">Savings</Badge>
-              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>Profiles with UPI IDs</CardDescription>
+                <CardTitle className="text-3xl">{summary.withUpi}</CardTitle>
+              </CardHeader>
             </Card>
           </div>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Explore rules</CardTitle>
-              <CardDescription>
-                Filter and search. Create, edit, or delete rows; changes persist via PUT to the admin API.
-              </CardDescription>
+            <CardContent className="pt-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search by merchant, UPI ID, account number, or category..."
+                  className="pl-10"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b border-[var(--border)]">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-xl">Database merchant mappings</CardTitle>
+                  <CardDescription>
+                    Clean merchant naming with category assignment and verification details.
+                  </CardDescription>
+                </div>
+                <Badge variant="secondary">{merchants.length}</Badge>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                <div className="flex-1 space-y-2">
-                  <label className="text-xs font-medium text-[var(--muted-foreground)]" htmlFor="merchant-search">
-                    Search
-                  </label>
-                  <Input
-                    id="merchant-search"
-                    placeholder="Match, pattern, category, or type…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <div className="grid flex-1 gap-3 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium text-[var(--muted-foreground)]">Type</span>
-                    <Select value={typeFilter} onValueChange={setTypeFilter}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="All types">
-                          {typeFilter === TYPE_FILTER_ALL ? 'All types' : typeFilter}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={TYPE_FILTER_ALL}>All types</SelectItem>
-                        <SelectItem value="Need">Need</SelectItem>
-                        <SelectItem value="Want">Want</SelectItem>
-                        <SelectItem value="Saving">Saving</SelectItem>
-                        <SelectItem value="Savings">Savings</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <span className="text-xs font-medium text-[var(--muted-foreground)]">Category</span>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="All categories">
-                          {categoryFilter === CATEGORY_FILTER_ALL
-                            ? 'All categories'
-                            : categoryFilter}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={CATEGORY_FILTER_ALL}>All categories</SelectItem>
-                        {categories.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--card)] p-1">
-                <button
-                  type="button"
-                  onClick={() => setTab('upi')}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    tab === 'upi'
-                      ? 'bg-[var(--accent)] text-[var(--accent-foreground)]'
-                      : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                  )}
-                >
-                  UPI substrings ({filteredUpi.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab('patterns')}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    tab === 'patterns'
-                      ? 'bg-[var(--accent)] text-[var(--accent-foreground)]'
-                      : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
-                  )}
-                >
-                  Name patterns ({filteredPatterns.length})
-                </button>
-              </div>
-
-              {tab === 'upi' ? (
-                <div className="rounded-md border border-[var(--border)]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[28%]">UPI substring</TableHead>
-                        <TableHead>System category</TableHead>
-                        <TableHead className="w-[100px]">Type</TableHead>
-                        <TableHead className="w-[120px] text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredUpi.map((row) => (
-                        <TableRow key={`upi-${row.match}-${row.systemCategoryName}-${row.type}`}>
-                          <TableCell>
-                            <code className="rounded bg-[var(--accent)] px-1.5 py-0.5 text-xs font-mono">
-                              {row.match}
-                            </code>
-                          </TableCell>
-                          <TableCell className="text-sm">{row.systemCategoryName}</TableCell>
-                          <TableCell>
-                            <Badge variant={typeBadgeVariant(row.type)}>{row.type}</Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                aria-label="Edit rule"
-                                onClick={() => openEditUpi(row)}
-                                disabled={updateMutation.isPending}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400"
-                                aria-label="Delete rule"
-                                onClick={() => deleteUpi(row)}
-                                disabled={updateMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Merchant</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Verification</TableHead>
+                    <TableHead>Usage</TableHead>
+                    <TableHead>Updated</TableHead>
+                    <TableHead className="w-24 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {merchants.length > 0 ? (
+                    merchants.map((merchant) => (
+                      <TableRow key={merchant.id}>
+                        <TableCell>
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)]">
+                              <Store className="h-5 w-5" />
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {filteredUpi.length === 0 && (
-                    <p className="p-6 text-center text-sm text-[var(--muted-foreground)]">
-                      No rows match your filters.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="rounded-md border border-[var(--border)]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="min-w-[200px]">Regex pattern</TableHead>
-                        <TableHead>System category</TableHead>
-                        <TableHead className="w-[100px]">Type</TableHead>
-                        <TableHead className="w-[120px] text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPatterns.map((row) => (
-                        <TableRow
-                          key={`pat-${row.pattern.slice(0, 48)}-${row.systemCategoryName}-${row.type}`}
-                        >
-                          <TableCell>
-                            <pre
-                              className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-[var(--border)] bg-[var(--accent)]/40 p-2 font-mono text-[11px] leading-relaxed"
-                              title={row.pattern}
+                            <div className="space-y-1">
+                              <div className="font-semibold text-[var(--foreground)]">
+                                {merchant.canonicalName}
+                              </div>
+                              <div className="text-xs text-[var(--muted-foreground)]">
+                                {merchant.upiId
+                                  ? `UPI: ${merchant.upiId}`
+                                  : merchant.accountNumber
+                                    ? `A/C: ${merchant.accountNumber}`
+                                    : 'No linked payee identifier'}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{merchant.systemCategory.name}</div>
+                          <div className="text-xs text-[var(--muted-foreground)]">
+                            {merchant.accountNumber
+                              ? `Account: ${merchant.accountNumber}`
+                              : 'UPI-led mapping'}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getTypeBadgeVariant(merchant.type)}>{merchant.type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Badge variant={getVerificationBadgeVariant(merchant.verificationLevel)}>
+                              {formatVerificationLevel(merchant.verificationLevel)}
+                            </Badge>
+                            <div className="text-xs text-[var(--muted-foreground)]">
+                              Confidence {merchant.confidence.toFixed(2)}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div>{merchant.seenCount} sightings</div>
+                            <div className="text-xs text-[var(--muted-foreground)]">
+                              {merchant._count.aliases} aliases, {merchant._count.transactions}{' '}
+                              transactions
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm text-[var(--muted-foreground)]">
+                          {formatDateTime(merchant.updatedAt)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => openEditDialog(merchant)}
+                              title="Edit merchant profile"
                             >
-                              {row.pattern}
-                            </pre>
-                          </TableCell>
-                          <TableCell className="align-top text-sm">{row.systemCategoryName}</TableCell>
-                          <TableCell className="align-top">
-                            <Badge variant={typeBadgeVariant(row.type)}>{row.type}</Badge>
-                          </TableCell>
-                          <TableCell className="align-top text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                aria-label="Edit rule"
-                                onClick={() => openEditPattern(row)}
-                                disabled={updateMutation.isPending}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-600 hover:text-red-700 dark:text-red-400"
-                                aria-label="Delete rule"
-                                onClick={() => deletePattern(row)}
-                                disabled={updateMutation.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                  {filteredPatterns.length === 0 && (
-                    <p className="p-6 text-center text-sm text-[var(--muted-foreground)]">
-                      No rows match your filters.
-                    </p>
+                              <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="py-12 text-center text-[var(--muted-foreground)]"
+                      >
+                        No merchant profiles found.
+                      </TableCell>
+                    </TableRow>
                   )}
-                </div>
-              )}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
         </div>
+
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingMerchant ? 'Edit Merchant Profile' : 'Create Merchant Profile'}
+              </DialogTitle>
+              <DialogDescription>
+                Maintain a clean canonical merchant name and link it to the correct system
+                category for auto-categorization.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="merchant-name">Merchant name</Label>
+                <Input
+                  id="merchant-name"
+                  value={form.canonicalName}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, canonicalName: event.target.value }))
+                  }
+                  placeholder="e.g. Vanakkam Cafe"
+                  required
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-upi">UPI ID</Label>
+                  <Input
+                    id="merchant-upi"
+                    value={form.upiId}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, upiId: event.target.value }))
+                    }
+                    placeholder="shop@okhdfcbank"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-account">Account number</Label>
+                  <Input
+                    id="merchant-account"
+                    value={form.accountNumber}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, accountNumber: event.target.value }))
+                    }
+                    placeholder="Optional bank account reference"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>System category</Label>
+                  <Select
+                    value={form.systemCategoryId}
+                    onValueChange={(value) =>
+                      setForm((current) => ({ ...current, systemCategoryId: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a category">
+                        {selectedCategoryLabel}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {systemCategories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name} ({category.type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merchant-confidence">Confidence</Label>
+                  <Input
+                    id="merchant-confidence"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={form.confidence}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, confidence: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {formError ? (
+                <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                  {formError}
+                </div>
+              ) : null}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={closeDialog}
+                  disabled={createMerchant.isPending || updateMerchant.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createMerchant.isPending || updateMerchant.isPending}
+                >
+                  {editingMerchant
+                    ? updateMerchant.isPending
+                      ? 'Saving...'
+                      : 'Save Changes'
+                    : createMerchant.isPending
+                      ? 'Creating...'
+                      : 'Create Merchant'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </AdminLayout>
     </AuthGuard>
   );

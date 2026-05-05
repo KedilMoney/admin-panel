@@ -26,7 +26,7 @@ const navigation = [
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Bank Master', href: '/bank-master', icon: Building2 },
   { name: 'Payees', href: '/payees', icon: UserCheck },
-  { name: 'Merchant Master', href: '/merchant-master', icon: Store },
+  { name: 'Merchant Profiles', href: '/merchant-master', icon: Store },
   { name: 'Category Tags', href: '/category-tags', icon: Tags },
   { name: 'Auto-Cat Lab', href: '/auto-cat-lab', icon: FlaskConical },
   { name: 'Groups', href: '/groups', icon: FolderKanban },
