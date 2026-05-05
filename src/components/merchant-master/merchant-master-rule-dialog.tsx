@@ -187,6 +187,7 @@ export function MerchantMasterRuleDialog({
                 <SelectContent>
                   <SelectItem value="Need">Need</SelectItem>
                   <SelectItem value="Want">Want</SelectItem>
+                  <SelectItem value="Saving">Saving</SelectItem>
                   <SelectItem value="Savings">Savings</SelectItem>
                 </SelectContent>
               </Select>

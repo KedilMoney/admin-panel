@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +23,12 @@ import {
   useGroupUsage,
   useUpdateBudgetTemplate,
 } from '@/lib/hooks/useAdmin';
-import { BudgetTemplateCategoryType, BudgetTemplateGroup } from '@/lib/api/admin';
+import {
+  adminApi,
+  AutoCatQueueStatsData,
+  BudgetTemplateCategoryType,
+  BudgetTemplateGroup,
+} from '@/lib/api/admin';
 import { formatDateTime } from '@/lib/utils';
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 
@@ -38,6 +43,11 @@ export default function AnalysisPage() {
 
   const [templateDraft, setTemplateDraft] = useState<BudgetTemplateGroup[]>([]);
   const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isDebugActionInProgress, setIsDebugActionInProgress] = useState(false);
+  const [debugFeedback, setDebugFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [debugJobIds, setDebugJobIds] = useState<string[]>([]);
+  const [debugJobStates, setDebugJobStates] = useState<Record<string, string>>({});
+  const [debugQueueStats, setDebugQueueStats] = useState<AutoCatQueueStatsData | null>(null);
 
   useEffect(() => {
     setTemplateDraft(
@@ -182,16 +192,130 @@ export default function AnalysisPage() {
     }
   };
 
+  const refreshDebugQueueStats = useCallback(async () => {
+    try {
+      const queueStats = await adminApi.getAutoCatQueueStats();
+      setDebugQueueStats(queueStats);
+    } catch {
+      // Non-blocking. Debug panel should keep running even if transiently unavailable.
+    }
+  }, []);
+
+  const pollAutoCatJobs = useCallback(async (jobIds: string[]) => {
+    if (jobIds.length === 0) return;
+
+    const pending = new Set(jobIds);
+    const maxAttempts = 120;
+
+    for (let attempt = 0; attempt < maxAttempts && pending.size > 0; attempt++) {
+      const current = Array.from(pending);
+      const statuses = await Promise.all(
+        current.map(async (jobId) => {
+          try {
+            const result = await adminApi.getAutoCatJobStatus(jobId);
+            return { jobId, state: result.state };
+          } catch {
+            return { jobId, state: 'unknown' };
+          }
+        })
+      );
+
+      setDebugJobStates((prev) => {
+        const next = { ...prev };
+        statuses.forEach(({ jobId, state }) => {
+          next[jobId] = state;
+        });
+        return next;
+      });
+
+      statuses.forEach(({ jobId, state }) => {
+        if (state === 'completed' || state === 'failed') {
+          pending.delete(jobId);
+        }
+      });
+
+      if (pending.size > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+  }, []);
+
+  const handleDebugClearAllCategoryPayee = async () => {
+    try {
+      setIsDebugActionInProgress(true);
+      setDebugFeedback(null);
+      const response = await adminApi.debugClearCategoryPayee();
+      setDebugFeedback({
+        type: 'success',
+        message: `Reset category/payee for ${response.updatedCount} transactions`,
+      });
+      await refreshDebugQueueStats();
+    } catch (error: any) {
+      setDebugFeedback({
+        type: 'error',
+        message: error?.response?.data?.message || error?.message || 'Failed to clear category/payee',
+      });
+    } finally {
+      setIsDebugActionInProgress(false);
+    }
+  };
+
+  const handleDebugApplyAutoCategorizeAll = async () => {
+    try {
+      setIsDebugActionInProgress(true);
+      setDebugFeedback(null);
+      const response = await adminApi.debugAutoCategorizeAll();
+      const jobIds = response.jobIds ?? (response.jobId ? [response.jobId] : []);
+
+      if (response.mode === 'sync') {
+        setDebugFeedback({
+          type: 'success',
+          message: `Auto-categorization completed for ${response.totalTransactions} transactions`,
+        });
+      } else {
+        setDebugJobIds(jobIds);
+        setDebugJobStates({});
+        setDebugFeedback({
+          type: 'info',
+          message: `Queued ${response.totalTransactions} transactions across ${jobIds.length} job(s). Monitoring progress...`,
+        });
+        await refreshDebugQueueStats();
+        await pollAutoCatJobs(jobIds);
+        await refreshDebugQueueStats();
+        setDebugFeedback({
+          type: 'success',
+          message: 'Auto-categorization jobs completed',
+        });
+      }
+    } catch (error: any) {
+      setDebugFeedback({
+        type: 'error',
+        message: error?.response?.data?.message || error?.message || 'Failed to auto-categorize transactions',
+      });
+    } finally {
+      setIsDebugActionInProgress(false);
+    }
+  };
+
   const refreshAll = async () => {
     await Promise.all([
       refetchOnboarding(),
       refetchCategoryUsage(),
       refetchGroupUsage(),
       refetchTemplate(),
+      refreshDebugQueueStats(),
     ]);
   };
 
   const loading = onboardingLoading || categoryUsageLoading || groupUsageLoading || templateLoading;
+
+  useEffect(() => {
+    void refreshDebugQueueStats();
+    const timer = setInterval(() => {
+      void refreshDebugQueueStats();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [refreshDebugQueueStats]);
 
   return (
     <AuthGuard>
@@ -382,6 +506,70 @@ export default function AnalysisPage() {
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Transaction Auto-Categorization Debug</CardTitle>
+                <Badge variant="secondary">Dynamic Queue Monitor</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleDebugClearAllCategoryPayee}
+                  disabled={isDebugActionInProgress}
+                >
+                  {isDebugActionInProgress ? 'Processing...' : 'Clear All Category/Payee'}
+                </Button>
+                <Button
+                  onClick={handleDebugApplyAutoCategorizeAll}
+                  disabled={isDebugActionInProgress}
+                >
+                  {isDebugActionInProgress ? 'Processing...' : 'Apply Auto-Categorize to All'}
+                </Button>
+              </div>
+
+              {debugFeedback && (
+                <div
+                  className={`rounded border px-3 py-2 text-sm ${
+                    debugFeedback.type === 'success'
+                      ? 'border-green-200 bg-green-50 text-green-700'
+                      : debugFeedback.type === 'error'
+                      ? 'border-red-200 bg-red-50 text-red-700'
+                      : 'border-blue-200 bg-blue-50 text-blue-700'
+                  }`}
+                >
+                  {debugFeedback.message}
+                </div>
+              )}
+
+              <div className="rounded border px-3 py-2 text-sm">
+                <div className="font-medium mb-1">Queue Status</div>
+                {debugQueueStats ? (
+                  <div className="text-[var(--muted-foreground)]">
+                    waiting {debugQueueStats.waiting} | active {debugQueueStats.active} | completed{' '}
+                    {debugQueueStats.completed} | failed {debugQueueStats.failed} | delayed{' '}
+                    {debugQueueStats.delayed}
+                  </div>
+                ) : (
+                  <div className="text-[var(--muted-foreground)]">Queue stats unavailable</div>
+                )}
+              </div>
+
+              {debugJobIds.length > 0 && (
+                <div className="rounded border px-3 py-2 text-sm">
+                  <div className="font-medium mb-1">Recent Jobs</div>
+                  <div className="text-[var(--muted-foreground)] break-all">
+                    {debugJobIds
+                      .map((jobId) => `${jobId}:${debugJobStates[jobId] || 'queued'}`)
+                      .join(' | ')}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

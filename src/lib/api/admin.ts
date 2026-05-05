@@ -60,6 +60,38 @@ export interface SystemCategoryTagsPayload {
   categories: SystemCategoryTagRow[];
 }
 
+export type AutoCatApplyMode = 'sync' | 'async';
+
+export interface AutoCatApplyResponseData {
+  mode: AutoCatApplyMode;
+  jobId?: string;
+  jobIds?: string[];
+  totalTransactions: number;
+}
+
+export interface AutoCatJobStatusData {
+  id: string | number;
+  state: string;
+  progress: unknown;
+  attemptsMade: number;
+  processedOn?: number;
+  finishedOn?: number;
+  failedReason?: string;
+}
+
+export interface AutoCatQueueStatsData {
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+  delayed: number;
+}
+
+export interface DebugClearCategoryPayeeResponseData {
+  updatedCount: number;
+  scope: 'selected' | 'all';
+}
+
 export const adminApi = {
   getOnboarding: async (): Promise<AdminOnboardingUser[]> => {
     const response = await api.get<AdminOnboardingUser[]>('/api/admin/onboarding');
@@ -99,6 +131,39 @@ export const adminApi = {
     const response = await api.put<SystemCategoryTagsPayload>('/api/admin/category-tags', {
       categories,
     });
+    return response.data.data;
+  },
+
+  debugClearCategoryPayee: async (): Promise<DebugClearCategoryPayeeResponseData> => {
+    const response = await api.post<DebugClearCategoryPayeeResponseData>(
+      '/api/transactions/debug/clear-category-payee',
+      {}
+    );
+    return response.data.data;
+  },
+
+  debugAutoCategorizeAll: async (): Promise<AutoCatApplyResponseData> => {
+    const response = await api.post<AutoCatApplyResponseData>(
+      '/api/transactions/debug/auto-categorize-all',
+      {
+        forceAsync: true,
+        forceRecategorize: true,
+      }
+    );
+    return response.data.data;
+  },
+
+  getAutoCatJobStatus: async (jobId: string): Promise<AutoCatJobStatusData> => {
+    const response = await api.get<AutoCatJobStatusData>(
+      `/api/transactions/auto-cat-job/${encodeURIComponent(jobId)}`
+    );
+    return response.data.data;
+  },
+
+  getAutoCatQueueStats: async (): Promise<AutoCatQueueStatsData> => {
+    const response = await api.get<AutoCatQueueStatsData>(
+      '/api/transactions/auto-cat-queue-stats'
+    );
     return response.data.data;
   },
 };

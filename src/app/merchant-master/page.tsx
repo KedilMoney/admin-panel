@@ -33,7 +33,7 @@ const TYPE_FILTER_ALL = '__all__';
 const CATEGORY_FILTER_ALL = '__all__';
 
 const typeBadgeVariant = (type: MerchantMasterRuleType) => {
-  if (type === 'Savings') return 'success' as const;
+  if (type === 'Savings' || type === 'Saving') return 'success' as const;
   if (type === 'Want') return 'secondary' as const;
   return 'outline' as const;
 };
@@ -310,6 +310,17 @@ export default function MerchantMasterPage() {
                 Dataset last updated:{' '}
                 <span className="font-medium text-[var(--foreground)]">{meta.lastUpdated}</span>
               </p>
+              {meta.serverAutoTrainingEnabled === true && (
+                <p className="mt-2 max-w-2xl text-xs text-[var(--muted-foreground)]">
+                  Server auto-training is enabled: after high-confidence LLM categorization, new UPI
+                  substring or name-pattern rules can be appended here automatically (refresh to see
+                  updates). Disable on the API with{' '}
+                  <code className="rounded bg-[var(--accent)] px-1 py-0.5 font-mono text-[11px]">
+                    AUTO_LEARN_MERCHANT_MASTER=0
+                  </code>
+                  .
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
               <Button variant="default" size="sm" onClick={openCreate} disabled={updateMutation.isPending}>
@@ -370,11 +381,12 @@ export default function MerchantMasterPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Need / Want / Savings</CardTitle>
+                <CardTitle className="text-sm font-medium">Need / Want / Saving</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
                 <Badge variant="outline">Need</Badge>
                 <Badge variant="secondary">Want</Badge>
+                <Badge variant="success">Saving</Badge>
                 <Badge variant="success">Savings</Badge>
               </CardContent>
             </Card>
@@ -413,6 +425,7 @@ export default function MerchantMasterPage() {
                         <SelectItem value={TYPE_FILTER_ALL}>All types</SelectItem>
                         <SelectItem value="Need">Need</SelectItem>
                         <SelectItem value="Want">Want</SelectItem>
+                        <SelectItem value="Saving">Saving</SelectItem>
                         <SelectItem value="Savings">Savings</SelectItem>
                       </SelectContent>
                     </Select>

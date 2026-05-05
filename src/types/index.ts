@@ -104,7 +104,7 @@ export interface Icon {
   updated_by?: string;
 }
 
-export type MerchantMasterRuleType = 'Need' | 'Want' | 'Savings';
+export type MerchantMasterRuleType = 'Need' | 'Want' | 'Saving' | 'Savings';
 
 export interface MerchantMasterUpiRule {
   match: string;
@@ -124,6 +124,8 @@ export interface MerchantMasterData {
     source: string;
     upiSubstringCount: number;
     namePatternCount: number;
+    /** Present when API supports it: LLM auto-categorization can append rules server-side. */
+    serverAutoTrainingEnabled?: boolean;
   };
   upiSubstrings: MerchantMasterUpiRule[];
   namePatterns: MerchantMasterNamePatternRule[];
