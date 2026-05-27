@@ -137,6 +137,73 @@ export interface SystemCategoryOption {
   type: string;
 }
 
+export type FeeModel = 'FEE_ONLY' | 'COMMISSION' | 'BOTH';
+export type TrialSession = 'NONE' | 'FIRST_SESSION';
+
+export interface Agency {
+  id: string;
+  name: string;
+  type: string;
+  description?: string | null;
+  website?: string | null;
+}
+
+export interface Expert {
+  id: string;
+  name: string;
+  lastName?: string | null;
+  photo?: string | null;
+  specialisation: string;
+  city: string;
+  bio: string;
+  feeModel: FeeModel;
+  trialSession: TrialSession;
+  certification: string;
+  registrationNo?: string | null;
+  sessionFeeMin: number;
+  sessionFeeMax: number;
+  experience: number;
+  languages: string[];
+  phone?: string | null;
+  whatsapp?: string | null;
+  website?: string | null;
+  isActive: boolean;
+  agency?: Agency | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Form-side mirror of Expert. Number fields are strings so the input can be
+ * cleared (you can't backspace the last digit when the state is forced to a
+ * number — every empty value coerces back to 0). Coerced to numbers in
+ * buildPayload before sending to the API.
+ */
+export interface ExpertFormData {
+  name: string;
+  lastName: string;
+  photo: string;
+  specialisation: string;
+  city: string;
+  bio: string;
+  feeModel: FeeModel;
+  trialSession: TrialSession;
+  certification: string;
+  registrationNo: string;
+  sessionFeeMin: string;
+  sessionFeeMax: string;
+  experience: string;
+  languages: string[];
+  phone: string;
+  whatsapp: string;
+  website: string;
+  hasAgency: boolean;
+  agencyName: string;
+  agencyType: string;
+  agencyDescription: string;
+  agencyWebsite: string;
+}
+
 export interface MerchantProfile {
   id: string;
   canonicalName: string;

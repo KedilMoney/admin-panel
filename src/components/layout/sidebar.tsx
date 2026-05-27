@@ -16,7 +16,8 @@ import {
   Store,
   Tags,
   FlaskConical,
-  UserCheck
+  UserCheck,
+  GraduationCap
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -32,6 +33,7 @@ const navigation = [
   { name: 'Groups', href: '/groups', icon: FolderKanban },
   { name: 'Categories', href: '/categories', icon: FolderTree },
   { name: 'Icons', href: '/icons', icon: Image },
+  { name: 'Experts', href: '/experts', icon: GraduationCap },
   { name: 'Support Tickets', href: '/support-tickets', icon: Headphones },
   { name: 'Analysis', href: '/analysis', icon: BarChart3 },
 ];

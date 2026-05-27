@@ -21,9 +21,9 @@ export const authApi = {
         password,
       });
       
-      // Extract token from response
-      // Response structure: { success: true, message: "...", data: { accessToken: "...", refreshToken: "...", user: {...} }, status: 200 }
-      const token = response.data?.data?.accessToken;
+      // Extract token — backend returns data as the token string directly
+      const rawData = response.data?.data;
+      const token = typeof rawData === 'string' ? rawData : rawData?.accessToken;
       
       if (!token) {
         throw new Error('No access token received from server');
