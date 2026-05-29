@@ -92,7 +92,26 @@ export interface DebugClearCategoryPayeeResponseData {
   scope: 'selected' | 'all';
 }
 
+export interface UserStats {
+  totalUsers: number;
+  activeNow: number;
+  newThisWeek: number;
+  newThisMonth: number;
+  dau: number;
+  wau: number;
+  mau: number;
+  onboardingCompletedCount: number;
+  onboardingCompletionRate: number;
+  lastLoginAt: string | null;
+  signupTrend: { date: string; count: number }[];
+}
+
 export const adminApi = {
+  getUserStats: async (): Promise<UserStats> => {
+    const response = await api.get<UserStats>('/api/admin/user-stats');
+    return response.data.data;
+  },
+
   getOnboarding: async (): Promise<AdminOnboardingUser[]> => {
     const response = await api.get<AdminOnboardingUser[]>('/api/admin/onboarding');
     return response.data.data;

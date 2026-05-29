@@ -3,7 +3,7 @@ import { User } from '@/types';
 
 export const usersApi = {
   getAll: async (): Promise<User[]> => {
-    const response = await api.get<User[]>('/api/users');
+    const response = await api.get<User[]>('/api/admin/users');
     return response.data.data;
   },
 
