@@ -5,10 +5,13 @@ export interface User {
   lastName?: string;
   email: string;
   phone?: string;
-  details?: any;
+  country?: string;
+  details?: unknown;
   createdAt?: string;
   updatedAt?: string;
   lastLoginAt?: string;
+  onboardingCompleted?: boolean;
+  isActive?: boolean;
 }
 
 export interface BankMaster {

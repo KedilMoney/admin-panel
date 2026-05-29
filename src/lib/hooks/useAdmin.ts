@@ -5,6 +5,14 @@ import {
   SystemCategoryTagRow,
 } from '@/lib/api/admin';
 
+export const useUserStats = () => {
+  return useQuery({
+    queryKey: ['admin-user-stats'],
+    queryFn: () => adminApi.getUserStats(),
+    refetchInterval: 60_000,
+  });
+};
+
 export const useAdminOnboarding = () => {
   return useQuery({
     queryKey: ['admin-onboarding'],
