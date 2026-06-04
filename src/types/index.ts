@@ -140,7 +140,6 @@ export interface SystemCategoryOption {
   type: string;
 }
 
-export type FeeModel = 'FEE_ONLY' | 'COMMISSION' | 'BOTH';
 export type TrialSession = 'NONE' | 'FIRST_SESSION';
 
 export interface Agency {
@@ -156,13 +155,13 @@ export interface Expert {
   name: string;
   lastName?: string | null;
   photo?: string | null;
-  specialisation: string;
+  specialisation: string[];
   city: string;
   bio: string;
-  feeModel: FeeModel;
+  feeModels: string[];
   trialSession: TrialSession;
-  certification: string;
-  registrationNo?: string | null;
+  certification: string[];
+  registrationNo: string[];
   sessionFeeMin: number;
   sessionFeeMax: number;
   experience: number;
@@ -170,6 +169,10 @@ export interface Expert {
   phone?: string | null;
   whatsapp?: string | null;
   website?: string | null;
+  linkedin?: string | null;
+  instagram?: string | null;
+  facebook?: string | null;
+  youtube?: string | null;
   isActive: boolean;
   agency?: Agency | null;
   createdAt: string;
@@ -186,13 +189,13 @@ export interface ExpertFormData {
   name: string;
   lastName: string;
   photo: string;
-  specialisation: string;
+  specialisation: string[];
   city: string;
   bio: string;
-  feeModel: FeeModel;
+  feeModels: string[];
   trialSession: TrialSession;
-  certification: string;
-  registrationNo: string;
+  certification: string[];
+  registrationNo: string[];
   sessionFeeMin: string;
   sessionFeeMax: string;
   experience: string;
@@ -200,6 +203,10 @@ export interface ExpertFormData {
   phone: string;
   whatsapp: string;
   website: string;
+  linkedin: string;
+  instagram: string;
+  facebook: string;
+  youtube: string;
   hasAgency: boolean;
   agencyName: string;
   agencyType: string;
