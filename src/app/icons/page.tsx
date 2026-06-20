@@ -34,6 +34,13 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 export default function IconsPage() {
+  const resolveImageUrl = useCallback((imageUrl?: string | null): string | undefined => {
+    if (!imageUrl) return undefined;
+    if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+    const normalizedPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+    return `${API_BASE_URL}${normalizedPath}`;
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 400); // 400ms debounce for API calls
   
@@ -141,13 +148,13 @@ export default function IconsPage() {
     });
     // Set preview from existing image
     if (icon.imageUrl) {
-      setImagePreview(`${API_BASE_URL}${icon.imageUrl}`);
+      setImagePreview(resolveImageUrl(icon.imageUrl) || null);
     } else {
       setImagePreview(null);
     }
     setImageFile(null);
     setShowCreateForm(false);
-  }, []);
+  }, [resolveImageUrl]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (confirm('Are you sure you want to delete this icon? This action cannot be undone.')) {
@@ -160,11 +167,8 @@ export default function IconsPage() {
   }, [deleteIcon]);
 
   const getImageUrl = useCallback((icon: Icon): string | undefined => {
-    if (icon.imageUrl) {
-      return `${API_BASE_URL}${icon.imageUrl}`;
-    }
-    return undefined;
-  }, []);
+    return resolveImageUrl(icon.imageUrl);
+  }, [resolveImageUrl]);
 
   // Client-side filtering for immediate feedback (only when search query is different from debounced)
   const filteredIcons = useMemo(() => {
