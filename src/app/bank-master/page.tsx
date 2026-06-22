@@ -11,9 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/lib/utils';
 import { Plus, Trash2, RefreshCw, X, MoreVertical, GripVertical, Edit, Image as ImageIcon } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { BankMaster } from '@/types';
-import Image from 'next/image';
 import { MigrateBankDialog } from './components/migrate-bank-dialog';
 import { bankMasterApi } from '@/lib/api/bankMaster';
 
@@ -39,6 +38,13 @@ export default function BankMasterPage() {
   const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
   const [bankToDelete, setBankToDelete] = useState<BankMaster | null>(null);
   const [accountsCount, setAccountsCount] = useState(0);
+
+  const resolveImageUrl = useCallback((imageUrl?: string | null): string | undefined => {
+    if (!imageUrl) return undefined;
+    if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+    const normalizedPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+    return `${API_BASE_URL}${normalizedPath}`;
+  }, []);
 
   const resetForm = () => {
     setFormData({ name: '', shortName: '', slug: '' });
@@ -94,7 +100,7 @@ export default function BankMasterPage() {
     });
     // Set preview from existing image
     if (bank.imageUrl) {
-      setImagePreview(API_BASE_URL + bank.imageUrl);
+      setImagePreview(resolveImageUrl(bank.imageUrl) || null);
     } else {
       setImagePreview(null);
     }
@@ -169,13 +175,7 @@ export default function BankMasterPage() {
     }
   };
 
-  const getImageUrl = (bank: BankMaster): string | undefined => {
-    console.log(API_BASE_URL + bank.imageUrl, 'bank.imageUrl');
-    if (bank.imageUrl) {
-      return API_BASE_URL + bank.imageUrl;
-    }
-    return undefined;
-  };
+  const getImageUrl = (bank: BankMaster): string | undefined => resolveImageUrl(bank.imageUrl);
 
   if (isLoading) {
     return (
