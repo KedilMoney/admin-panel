@@ -28,11 +28,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   useCreateMerchantProfile,
   useMerchantProfiles,
+  useRunMerchantMergeJob,
   useUpdateMerchantProfile,
 } from '@/lib/hooks/useMerchantProfiles';
 import { formatDateTime } from '@/lib/utils';
 import type { MerchantProfile } from '@/types';
-import { Edit, Plus, RefreshCw, Search, Store } from 'lucide-react';
+import { Edit, Eye, GitMerge, Plus, RefreshCw, Search, Store } from 'lucide-react';
+import { MerchantProfileDetailDialog } from '@/components/merchant-profiles/merchant-profile-detail-dialog';
 
 type MerchantProfileFormState = {
   canonicalName: string;
@@ -100,13 +102,17 @@ const formatSubmitError = (error: unknown) => {
 export default function MerchantMasterPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [editingMerchant, setEditingMerchant] = useState<MerchantProfile | null>(null);
+  const [detailMerchant, setDetailMerchant] = useState<MerchantProfile | null>(null);
   const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState('');
+  const [mergeMessage, setMergeMessage] = useState('');
 
   const { data, isLoading, error, refetch, isFetching } = useMerchantProfiles(searchQuery);
   const createMerchant = useCreateMerchantProfile();
   const updateMerchant = useUpdateMerchantProfile();
+  const runMergeJob = useRunMerchantMergeJob();
 
   const merchants = useMemo(() => data?.merchants ?? [], [data]);
   const systemCategories = useMemo(() => data?.systemCategories ?? [], [data]);
@@ -139,6 +145,7 @@ export default function MerchantMasterPage() {
   };
 
   const openEditDialog = (merchant: MerchantProfile) => {
+    setIsDetailOpen(false);
     setEditingMerchant(merchant);
     setForm({
       canonicalName: merchant.canonicalName,
@@ -149,6 +156,23 @@ export default function MerchantMasterPage() {
     });
     setFormError('');
     setIsDialogOpen(true);
+  };
+
+  const openDetailDialog = (merchant: MerchantProfile) => {
+    setDetailMerchant(merchant);
+    setIsDetailOpen(true);
+  };
+
+  const handleRunMergeJob = async () => {
+    setMergeMessage('');
+    try {
+      const result = await runMergeJob.mutateAsync();
+      setMergeMessage(
+        `Merge job finished: ${result.mergedGroups} group(s) merged, ${result.deletedProfiles} duplicate profile(s) removed.`
+      );
+    } catch (mergeError: unknown) {
+      setMergeMessage(formatSubmitError(mergeError));
+    }
   };
 
   const closeDialog = () => {
@@ -250,6 +274,15 @@ export default function MerchantMasterPage() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button
+                onClick={handleRunMergeJob}
+                variant="outline"
+                size="sm"
+                disabled={runMergeJob.isPending}
+              >
+                <GitMerge className={`mr-2 h-4 w-4 ${runMergeJob.isPending ? 'animate-pulse' : ''}`} />
+                {runMergeJob.isPending ? 'Running merge…' : 'Run merge job'}
+              </Button>
               <Button onClick={() => refetch()} variant="outline" size="sm">
                 <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
                 Refresh
@@ -260,6 +293,12 @@ export default function MerchantMasterPage() {
               </Button>
             </div>
           </div>
+
+          {mergeMessage ? (
+            <div className="rounded-md border border-[var(--border)] bg-[var(--accent)] px-4 py-3 text-sm text-[var(--foreground)]">
+              {mergeMessage}
+            </div>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -335,11 +374,13 @@ export default function MerchantMasterPage() {
                                 {merchant.canonicalName}
                               </div>
                               <div className="text-xs text-[var(--muted-foreground)]">
-                                {merchant.upiId
-                                  ? `UPI: ${merchant.upiId}`
-                                  : merchant.accountNumber
-                                    ? `A/C: ${merchant.accountNumber}`
-                                    : 'No linked payee identifier'}
+                                {merchant.identifiers && merchant.identifiers.length > 0
+                                  ? `${merchant.identifiers.length} payment ID(s)`
+                                  : merchant.upiId
+                                    ? `UPI: ${merchant.upiId}`
+                                    : merchant.accountNumber
+                                      ? `A/C: ${merchant.accountNumber}`
+                                      : 'No linked payee identifier'}
                               </div>
                             </div>
                           </div>
@@ -369,8 +410,11 @@ export default function MerchantMasterPage() {
                           <div className="text-sm">
                             <div>{merchant.seenCount} sightings</div>
                             <div className="text-xs text-[var(--muted-foreground)]">
-                              {merchant._count.aliases} aliases, {merchant._count.transactions}{' '}
-                              transactions
+                              {merchant._count.aliases} aliases
+                              {merchant._count.identifiers != null
+                                ? `, ${merchant._count.identifiers} IDs`
+                                : ''}
+                              , {merchant._count.transactions} transactions
                             </div>
                           </div>
                         </TableCell>
@@ -378,7 +422,16 @@ export default function MerchantMasterPage() {
                           {formatDateTime(merchant.updatedAt)}
                         </TableCell>
                         <TableCell>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => openDetailDialog(merchant)}
+                              title="View merchant profile"
+                            >
+                              <Eye className="h-4 w-4 text-[var(--muted-foreground)]" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -407,6 +460,13 @@ export default function MerchantMasterPage() {
             </CardContent>
           </Card>
         </div>
+
+        <MerchantProfileDetailDialog
+          merchant={detailMerchant}
+          open={isDetailOpen}
+          onOpenChange={setIsDetailOpen}
+          onEdit={openEditDialog}
+        />
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
           <DialogContent className="max-h-[85vh] overflow-y-auto">

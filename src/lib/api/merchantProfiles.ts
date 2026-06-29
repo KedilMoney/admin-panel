@@ -1,5 +1,9 @@
 import { api } from './client';
-import type { MerchantProfile, SystemCategoryOption } from '@/types';
+import type {
+  MerchantMergeJobResult,
+  MerchantProfile,
+  SystemCategoryOption,
+} from '@/types';
 
 export interface MerchantProfilesResponse {
   merchants: MerchantProfile[];
@@ -12,6 +16,11 @@ export interface MerchantProfilePayload {
   upiId?: string | null;
   accountNumber?: string | null;
   confidence?: number;
+}
+
+export interface AddMerchantAliasPayload {
+  rawName: string;
+  bankSource?: string | null;
 }
 
 export const merchantProfilesApi = {
@@ -35,6 +44,31 @@ export const merchantProfilesApi = {
 
   update: async (id: string, payload: MerchantProfilePayload): Promise<MerchantProfile> => {
     const response = await api.put<MerchantProfile>(`/api/admin/merchant-profiles/${id}`, payload);
+    return response.data.data;
+  },
+
+  addAlias: async (
+    profileId: string,
+    payload: AddMerchantAliasPayload
+  ): Promise<{ profileId: string; rawName: string }> => {
+    const response = await api.post<{ profileId: string; rawName: string }>(
+      `/api/admin/merchant-profiles/${profileId}/aliases`,
+      payload
+    );
+    return response.data.data;
+  },
+
+  removeAlias: async (profileId: string, aliasId: string): Promise<{ deleted: boolean }> => {
+    const response = await api.delete<{ deleted: boolean }>(
+      `/api/admin/merchant-profiles/${profileId}/aliases/${aliasId}`
+    );
+    return response.data.data;
+  },
+
+  runMergeJob: async (): Promise<MerchantMergeJobResult> => {
+    const response = await api.post<MerchantMergeJobResult>(
+      '/api/admin/merchant-profiles/merge-job'
+    );
     return response.data.data;
   },
 };

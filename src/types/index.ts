@@ -214,6 +214,20 @@ export interface ExpertFormData {
   agencyWebsite: string;
 }
 
+export interface MerchantAlias {
+  id: string;
+  rawName: string;
+  bankSource?: string | null;
+  seenCount: number;
+}
+
+export interface MerchantIdentifier {
+  id: string;
+  type: 'UPI' | 'NEFT' | 'ACCOUNT';
+  value: string;
+  createdAt: string;
+}
+
 export interface MerchantProfile {
   id: string;
   canonicalName: string;
@@ -227,9 +241,17 @@ export interface MerchantProfile {
   updatedAt: string;
   systemCategoryId: string;
   systemCategory: SystemCategoryOption;
+  aliases?: MerchantAlias[];
+  identifiers?: MerchantIdentifier[];
   _count: {
     aliases: number;
     transactions: number;
+    identifiers?: number;
   };
+}
+
+export interface MerchantMergeJobResult {
+  mergedGroups: number;
+  deletedProfiles: number;
 }
 
