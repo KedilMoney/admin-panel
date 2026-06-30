@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
@@ -47,6 +47,7 @@ import { cn, formatDateTime } from '@/lib/utils';
 import type { MerchantProfile } from '@/types';
 import {
   AlertCircle,
+  ChevronDown,
   GitMerge,
   Loader2,
   Plus,
@@ -55,6 +56,8 @@ import {
 } from 'lucide-react';
 import { MerchantProfileMergeDialog } from '@/components/merchant-profiles/merchant-profile-merge-dialog';
 import { MerchantProfileWorkspace } from '@/components/merchant-profiles/merchant-profile-workspace';
+import { DuplicateMerchantsCard } from '@/components/merchant-profiles/duplicate-merchants-card';
+import { findDuplicateMerchantGroups } from '@/lib/merchant-profiles/duplicateGroups';
 
 type MerchantProfileFormState = {
   canonicalName: string;
@@ -107,6 +110,9 @@ export default function MerchantMasterPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [mergeSurvivorId, setMergeSurvivorId] = useState<string | null>(null);
+  const [mergeDuplicateIds, setMergeDuplicateIds] = useState<string[]>([]);
+  const [showDuplicatePanel, setShowDuplicatePanel] = useState(false);
+  const duplicatePanelRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState('');
@@ -150,6 +156,11 @@ export default function MerchantMasterPage() {
       ? 'All categories'
       : (systemCategories.find((category) => category.id === categoryFilter)?.name ?? 'Category');
 
+  const duplicateGroups = useMemo(
+    () => findDuplicateMerchantGroups(merchants),
+    [merchants]
+  );
+
   const summary = useMemo(
     () => ({
       total: merchants.length,
@@ -158,9 +169,26 @@ export default function MerchantMasterPage() {
         ['user_confirmed', 'multi_user_confirmed'].includes(merchant.verificationLevel)
       ).length,
       withIdentifiers: merchants.filter(hasPaymentIdentifiers).length,
+      duplicateGroups: duplicateGroups.length,
     }),
-    [merchants]
+    [merchants, duplicateGroups]
   );
+
+  const openMergeDialog = (survivorId: string | null = null, duplicateIds: string[] = []) => {
+    setMergeSurvivorId(survivorId);
+    setMergeDuplicateIds(duplicateIds);
+    setIsMergeOpen(true);
+  };
+
+  const toggleDuplicatePanel = () => {
+    if (summary.duplicateGroups === 0) return;
+    setShowDuplicatePanel((current) => !current);
+  };
+
+  useEffect(() => {
+    if (!showDuplicatePanel) return;
+    duplicatePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [showDuplicatePanel]);
 
   const openCreateDialog = () => {
     setForm(INITIAL_FORM);
@@ -279,10 +307,7 @@ export default function MerchantMasterPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => {
-                  setMergeSurvivorId(null);
-                  setIsMergeOpen(true);
-                }}
+                onClick={() => openMergeDialog()}
                 variant="outline"
                 size="sm"
               >
@@ -315,7 +340,7 @@ export default function MerchantMasterPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Card>
               <CardHeader className="pb-2">
                 <CardDescription>Total profiles</CardDescription>
@@ -342,7 +367,53 @@ export default function MerchantMasterPage() {
                 <CardTitle className="text-2xl">{summary.withIdentifiers}</CardTitle>
               </CardHeader>
             </Card>
+            <button
+              type="button"
+              onClick={toggleDuplicatePanel}
+              disabled={summary.duplicateGroups === 0}
+              className={cn(
+                'rounded-xl border border-[var(--border)] bg-[var(--card)] text-left transition-colors',
+                summary.duplicateGroups > 0 &&
+                  'cursor-pointer hover:border-violet-500/40 hover:bg-violet-500/5',
+                showDuplicatePanel && 'border-violet-500/50 bg-violet-500/10 ring-2 ring-violet-500/20',
+                summary.duplicateGroups === 0 && 'cursor-default opacity-70'
+              )}
+            >
+              <CardHeader className="pb-2">
+                <CardDescription className="flex items-center justify-between gap-2">
+                  <span>Duplicate name groups</span>
+                  {summary.duplicateGroups > 0 ? (
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 text-violet-600 transition-transform dark:text-violet-400',
+                        showDuplicatePanel && 'rotate-180'
+                      )}
+                    />
+                  ) : null}
+                </CardDescription>
+                <CardTitle className="text-2xl text-violet-700 dark:text-violet-300">
+                  {summary.duplicateGroups}
+                </CardTitle>
+                {summary.duplicateGroups > 0 ? (
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    {showDuplicatePanel ? 'Showing all groups below' : 'Click to view all duplicates'}
+                  </p>
+                ) : null}
+              </CardHeader>
+            </button>
           </div>
+
+          {showDuplicatePanel ? (
+            <div ref={duplicatePanelRef}>
+              <DuplicateMerchantsCard
+                groups={duplicateGroups}
+                expanded
+                onClose={() => setShowDuplicatePanel(false)}
+                onSelectMerchant={setSelectedId}
+                onMergeGroup={(survivorId, duplicateIds) => openMergeDialog(survivorId, duplicateIds)}
+              />
+            </div>
+          ) : null}
 
           <div
             className={cn(
@@ -514,10 +585,7 @@ export default function MerchantMasterPage() {
                 merchant={selectedMerchant}
                 systemCategories={systemCategories}
                 onClose={() => setSelectedId(null)}
-                onMerge={(merchant) => {
-                  setMergeSurvivorId(merchant.id);
-                  setIsMergeOpen(true);
-                }}
+                onMerge={(merchant) => openMergeDialog(merchant.id)}
               />
             ) : null}
           </div>
@@ -529,9 +597,13 @@ export default function MerchantMasterPage() {
           open={isMergeOpen}
           onOpenChange={(open) => {
             setIsMergeOpen(open);
-            if (!open) setMergeSurvivorId(null);
+            if (!open) {
+              setMergeSurvivorId(null);
+              setMergeDuplicateIds([]);
+            }
           }}
           initialSurvivorId={mergeSurvivorId}
+          initialDuplicateIds={mergeDuplicateIds}
         />
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>

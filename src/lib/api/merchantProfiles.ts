@@ -30,7 +30,7 @@ export interface AddMerchantIdentifierPayload {
 
 export interface MergeMerchantProfilesPayload {
   survivorId: string;
-  duplicateId: string;
+  duplicateIds: string[];
   systemCategoryId?: string | null;
 }
 
@@ -43,7 +43,9 @@ export interface SplitMerchantPayload {
 
 export interface MergeMerchantProfilesResult {
   survivorId: string;
-  duplicateId: string;
+  duplicateId: string | null;
+  duplicateIds: string[];
+  mergedCount: number;
   profile: MerchantProfile;
 }
 

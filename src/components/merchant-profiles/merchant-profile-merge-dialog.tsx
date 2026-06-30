@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/merchant-profiles/utils';
 import type { MerchantProfile, SystemCategoryOption } from '@/types';
 import { useMergeMerchantProfiles } from '@/lib/hooks/useMerchantProfiles';
+import { cn } from '@/lib/utils';
 import { GitMerge, Loader2 } from 'lucide-react';
 
 interface MerchantProfileMergeDialogProps {
@@ -33,6 +35,7 @@ interface MerchantProfileMergeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialSurvivorId?: string | null;
+  initialDuplicateIds?: string[];
 }
 
 const formatMerchantOption = (merchant: MerchantProfile) => {
@@ -67,9 +70,10 @@ export function MerchantProfileMergeDialog({
   open,
   onOpenChange,
   initialSurvivorId = null,
+  initialDuplicateIds = [],
 }: MerchantProfileMergeDialogProps) {
   const [survivorId, setSurvivorId] = useState('');
-  const [duplicateId, setDuplicateId] = useState('');
+  const [duplicateIds, setDuplicateIds] = useState<string[]>([]);
   const [systemCategoryId, setSystemCategoryId] = useState('');
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -77,28 +81,56 @@ export function MerchantProfileMergeDialog({
   const mergeProfiles = useMergeMerchantProfiles();
 
   useEffect(() => {
-    if (open && initialSurvivorId) {
-      setSurvivorId(initialSurvivorId);
+    if (open) {
+      if (initialSurvivorId) {
+        setSurvivorId(initialSurvivorId);
+      }
+      if (initialDuplicateIds.length > 0) {
+        setDuplicateIds(initialDuplicateIds.filter((id) => id !== initialSurvivorId));
+      }
     }
-  }, [open, initialSurvivorId]);
+  }, [open, initialSurvivorId, initialDuplicateIds]);
+
+  useEffect(() => {
+    setDuplicateIds((current) => current.filter((id) => id !== survivorId));
+  }, [survivorId]);
 
   const survivor = useMemo(
     () => merchants.find((merchant) => merchant.id === survivorId),
     [merchants, survivorId]
   );
-  const duplicate = useMemo(
-    () => merchants.find((merchant) => merchant.id === duplicateId),
-    [merchants, duplicateId]
+
+  const duplicateCandidates = useMemo(
+    () => merchants.filter((merchant) => merchant.id !== survivorId),
+    [merchants, survivorId]
   );
 
-  const categoriesConflict =
-    survivor &&
-    duplicate &&
-    survivor.systemCategoryId !== duplicate.systemCategoryId;
+  const selectedDuplicates = useMemo(
+    () => merchants.filter((merchant) => duplicateIds.includes(merchant.id)),
+    [merchants, duplicateIds]
+  );
+
+  const categoriesConflict = useMemo(() => {
+    if (!survivor || selectedDuplicates.length === 0) return false;
+    const categoryIds = new Set([
+      survivor.systemCategoryId,
+      ...selectedDuplicates.map((duplicate) => duplicate.systemCategoryId),
+    ]);
+    return categoryIds.size > 1;
+  }, [survivor, selectedDuplicates]);
+
+  const conflictingCategoryNames = useMemo(() => {
+    if (!survivor) return [];
+    const names = new Set<string>([survivor.systemCategory.name]);
+    for (const duplicate of selectedDuplicates) {
+      names.add(duplicate.systemCategory.name);
+    }
+    return [...names];
+  }, [survivor, selectedDuplicates]);
 
   const resetForm = () => {
     setSurvivorId('');
-    setDuplicateId('');
+    setDuplicateIds([]);
     setSystemCategoryId('');
     setFormError('');
     setSuccessMessage('');
@@ -111,18 +143,26 @@ export function MerchantProfileMergeDialog({
     onOpenChange(nextOpen);
   };
 
+  const toggleDuplicate = (duplicateId: string) => {
+    setDuplicateIds((current) =>
+      current.includes(duplicateId)
+        ? current.filter((id) => id !== duplicateId)
+        : [...current, duplicateId]
+    );
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError('');
     setSuccessMessage('');
 
-    if (!survivorId || !duplicateId) {
-      setFormError('Choose both a survivor profile and a duplicate to merge.');
+    if (!survivorId) {
+      setFormError('Choose a survivor profile to keep.');
       return;
     }
 
-    if (survivorId === duplicateId) {
-      setFormError('Survivor and duplicate must be different profiles.');
+    if (duplicateIds.length === 0) {
+      setFormError('Select at least one duplicate profile to merge in.');
       return;
     }
 
@@ -134,13 +174,14 @@ export function MerchantProfileMergeDialog({
     try {
       const result = await mergeProfiles.mutateAsync({
         survivorId,
-        duplicateId,
+        duplicateIds,
         systemCategoryId: categoriesConflict ? systemCategoryId : null,
       });
+      const survivorName = result.profile?.canonicalName ?? survivor?.canonicalName ?? 'profile';
       setSuccessMessage(
-        `Merged successfully. Survivor is now "${result.profile?.canonicalName ?? survivor?.canonicalName}" with all payment IDs and aliases combined.`
+        `Merged ${result.mergedCount} duplicate profile${result.mergedCount === 1 ? '' : 's'} into "${survivorName}". All payment IDs, aliases, and transactions are now on the survivor.`
       );
-      setDuplicateId('');
+      setDuplicateIds([]);
     } catch (error: unknown) {
       setFormError(formatSubmitError(error));
     }
@@ -148,20 +189,20 @@ export function MerchantProfileMergeDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Merge merchant profiles</DialogTitle>
           <DialogDescription>
-            Use this when the same real-world merchant has multiple profiles (e.g. different UPI
-            IDs). Pick which profile to keep — all payment IDs, aliases, and linked transactions
-            move to it; the other profile is deleted.
+            Pick one profile to keep and select every duplicate to merge into it. Payment IDs,
+            aliases, and linked transactions from all selected duplicates move to the survivor; the
+            duplicate profiles are deleted.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-md border border-[var(--border)] bg-[var(--accent)]/30 px-3 py-2 text-xs text-[var(--muted-foreground)]">
             <strong className="text-[var(--foreground)]">What users see:</strong> past transactions
-            from the duplicate re-link to the survivor. Future payments on any merged UPI ID
+            from every duplicate re-link to the survivor. Future payments on any merged UPI ID
             auto-categorize to the same merchant and category.
           </div>
 
@@ -184,30 +225,64 @@ export function MerchantProfileMergeDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Merge this duplicate into survivor (removed)</Label>
-            <Select value={duplicateId} onValueChange={setDuplicateId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose duplicate">
-                  {duplicate ? formatMerchantOption(duplicate) : undefined}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {merchants
-                  .filter((merchant) => merchant.id !== survivorId)
-                  .map((merchant) => (
-                    <SelectItem key={merchant.id} value={merchant.id}>
-                      {formatMerchantOption(merchant)}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between gap-2">
+              <Label>Merge these duplicates into survivor (removed)</Label>
+              {duplicateIds.length > 0 ? (
+                <Badge variant="secondary">{duplicateIds.length} selected</Badge>
+              ) : null}
+            </div>
+
+            {!survivorId ? (
+              <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-4 text-sm text-[var(--muted-foreground)]">
+                Choose a survivor first.
+              </p>
+            ) : duplicateCandidates.length === 0 ? (
+              <p className="rounded-md border border-dashed border-[var(--border)] px-3 py-4 text-sm text-[var(--muted-foreground)]">
+                No other profiles available to merge.
+              </p>
+            ) : (
+              <div className="max-h-56 space-y-1 overflow-y-auto rounded-md border border-[var(--border)] p-2">
+                {duplicateCandidates.map((merchant) => {
+                  const checked = duplicateIds.includes(merchant.id);
+                  return (
+                    <label
+                      key={merchant.id}
+                      className={cn(
+                        'flex cursor-pointer items-start gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-[var(--accent)]',
+                        checked && 'bg-[var(--accent)]/60'
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 shrink-0 accent-[var(--foreground)]"
+                        checked={checked}
+                        onChange={() => toggleDuplicate(merchant.id)}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium leading-snug">
+                          {merchant.canonicalName}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-[var(--muted-foreground)]">
+                          {merchant.systemCategory.name}
+                          {getPrimaryIdentifier(merchant)
+                            ? ` · ${formatIdentifierLabel(getPrimaryIdentifier(merchant)!)}`
+                            : ' · no payment ID'}
+                          {' · '}
+                          {merchant._count.aliases} aliases
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {categoriesConflict ? (
             <div className="space-y-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Category conflict: survivor is {survivor?.systemCategory.name}, duplicate is{' '}
-                {duplicate?.systemCategory.name}. Pick the category for the merged profile.
+                Category conflict across selected profiles: {conflictingCategoryNames.join(', ')}.
+                Pick the category for the merged survivor.
               </p>
               <Select value={systemCategoryId} onValueChange={setSystemCategoryId}>
                 <SelectTrigger>
@@ -236,13 +311,17 @@ export function MerchantProfileMergeDialog({
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Close
             </Button>
-            <Button type="submit" disabled={mergeProfiles.isPending}>
+            <Button
+              type="submit"
+              disabled={mergeProfiles.isPending || !survivorId || duplicateIds.length === 0}
+            >
               {mergeProfiles.isPending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <GitMerge className="mr-2 h-4 w-4" />
               )}
-              Merge profiles
+              Merge {duplicateIds.length > 0 ? `${duplicateIds.length} ` : ''}
+              profile{duplicateIds.length === 1 ? '' : 's'}
             </Button>
           </DialogFooter>
         </form>
