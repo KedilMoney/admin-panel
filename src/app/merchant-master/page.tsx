@@ -57,7 +57,9 @@ import {
 import { MerchantProfileMergeDialog } from '@/components/merchant-profiles/merchant-profile-merge-dialog';
 import { MerchantProfileWorkspace } from '@/components/merchant-profiles/merchant-profile-workspace';
 import { DuplicateMerchantsCard } from '@/components/merchant-profiles/duplicate-merchants-card';
-import { findDuplicateMerchantGroups } from '@/lib/merchant-profiles/duplicateGroups';
+import {
+  findKeywordDuplicateGroups,
+} from '@/lib/merchant-profiles/duplicateGroups';
 
 type MerchantProfileFormState = {
   canonicalName: string;
@@ -122,10 +124,12 @@ export default function MerchantMasterPage() {
   const { data, isLoading, error, refetch, isFetching } = useMerchantProfiles(
     debouncedSearch.trim() || undefined
   );
+  const { data: allMerchantsData } = useMerchantProfiles(undefined);
   const createMerchant = useCreateMerchantProfile();
   const runMergeJob = useRunMerchantMergeJob();
 
   const merchants = useMemo(() => data?.merchants ?? [], [data]);
+  const allMerchants = useMemo(() => allMerchantsData?.merchants ?? merchants, [allMerchantsData, merchants]);
   const systemCategories = useMemo(() => data?.systemCategories ?? [], [data]);
 
   const filteredMerchants = useMemo(() => {
@@ -157,21 +161,21 @@ export default function MerchantMasterPage() {
       : (systemCategories.find((category) => category.id === categoryFilter)?.name ?? 'Category');
 
   const duplicateGroups = useMemo(
-    () => findDuplicateMerchantGroups(merchants),
-    [merchants]
+    () => findKeywordDuplicateGroups(allMerchants),
+    [allMerchants]
   );
 
   const summary = useMemo(
     () => ({
-      total: merchants.length,
-      needsReview: merchants.filter((merchant) => needsReview(merchant.verificationLevel)).length,
-      confirmed: merchants.filter((merchant) =>
+      total: allMerchants.length,
+      needsReview: allMerchants.filter((merchant) => needsReview(merchant.verificationLevel)).length,
+      confirmed: allMerchants.filter((merchant) =>
         ['user_confirmed', 'multi_user_confirmed'].includes(merchant.verificationLevel)
       ).length,
-      withIdentifiers: merchants.filter(hasPaymentIdentifiers).length,
+      withIdentifiers: allMerchants.filter(hasPaymentIdentifiers).length,
       duplicateGroups: duplicateGroups.length,
     }),
-    [merchants, duplicateGroups]
+    [allMerchants, duplicateGroups]
   );
 
   const openMergeDialog = (survivorId: string | null = null, duplicateIds: string[] = []) => {
@@ -340,6 +344,22 @@ export default function MerchantMasterPage() {
             </div>
           ) : null}
 
+          <div className="relative max-w-2xl">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+            <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search name, alias, or UPI ID (e.g. Vanak)…"
+              className="pl-10"
+            />
+            {searchQuery !== debouncedSearch ? (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--muted-foreground)]" />
+            ) : null}
+          </div>
+          <p className="-mt-3 max-w-2xl text-xs text-[var(--muted-foreground)]">
+            Filter the browse list by name, alias, UPI ID, or category.
+          </p>
+
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <Card>
               <CardHeader className="pb-2">
@@ -381,7 +401,7 @@ export default function MerchantMasterPage() {
             >
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center justify-between gap-2">
-                  <span>Duplicate name groups</span>
+                  <span>Duplicate keyword groups</span>
                   {summary.duplicateGroups > 0 ? (
                     <ChevronDown
                       className={cn(
@@ -394,11 +414,13 @@ export default function MerchantMasterPage() {
                 <CardTitle className="text-2xl text-violet-700 dark:text-violet-300">
                   {summary.duplicateGroups}
                 </CardTitle>
-                {summary.duplicateGroups > 0 ? (
-                  <p className="text-xs text-[var(--muted-foreground)]">
-                    {showDuplicatePanel ? 'Showing all groups below' : 'Click to view all duplicates'}
-                  </p>
-                ) : null}
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {summary.duplicateGroups > 0
+                    ? showDuplicatePanel
+                      ? 'Click a group below to see merchants'
+                      : 'Click to view groups (Vanak, Apollo, …)'
+                    : 'No keyword groups found'}
+                </p>
               </CardHeader>
             </button>
           </div>
@@ -430,19 +452,6 @@ export default function MerchantMasterPage() {
                     {searchQuery !== debouncedSearch ? ' · searching…' : ''}
                     {isFetching && searchQuery === debouncedSearch ? ' · updating…' : ''}
                   </CardDescription>
-                </div>
-
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search name, alias, UPI, account, category…"
-                    className="pl-10"
-                  />
-                  {searchQuery !== debouncedSearch ? (
-                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--muted-foreground)]" />
-                  ) : null}
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
