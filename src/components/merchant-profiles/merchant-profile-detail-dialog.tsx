@@ -543,9 +543,6 @@ export function MerchantProfileDetailDialog({
                   System category
                 </p>
                 <p className="mt-1 font-medium">{merchant.systemCategory.name}</p>
-                <Badge variant="secondary" className="mt-2">
-                  {merchant.type}
-                </Badge>
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">

@@ -106,6 +106,7 @@ export default function MerchantMasterPage() {
   const [reviewOnly, setReviewOnly] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
+  const [mergeSurvivorId, setMergeSurvivorId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState('');
@@ -277,7 +278,14 @@ export default function MerchantMasterPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => setIsMergeOpen(true)} variant="outline" size="sm">
+              <Button
+                onClick={() => {
+                  setMergeSurvivorId(null);
+                  setIsMergeOpen(true);
+                }}
+                variant="outline"
+                size="sm"
+              >
                 <GitMerge className="mr-2 h-4 w-4" />
                 Merge profiles
               </Button>
@@ -447,7 +455,7 @@ export default function MerchantMasterPage() {
                             <div className="min-w-0 space-y-1">
                               <p className="truncate font-semibold">{merchant.canonicalName}</p>
                               <p className="truncate text-xs text-[var(--muted-foreground)]">
-                                {merchant.systemCategory.name} · {merchant.type}
+                                {merchant.systemCategory.name}
                               </p>
                             </div>
                             <Badge variant="outline" className="shrink-0 text-[10px]">
@@ -506,6 +514,10 @@ export default function MerchantMasterPage() {
                 merchant={selectedMerchant}
                 systemCategories={systemCategories}
                 onClose={() => setSelectedId(null)}
+                onMerge={(merchant) => {
+                  setMergeSurvivorId(merchant.id);
+                  setIsMergeOpen(true);
+                }}
               />
             ) : null}
           </div>
@@ -515,7 +527,11 @@ export default function MerchantMasterPage() {
           merchants={merchants}
           systemCategories={systemCategories}
           open={isMergeOpen}
-          onOpenChange={setIsMergeOpen}
+          onOpenChange={(open) => {
+            setIsMergeOpen(open);
+            if (!open) setMergeSurvivorId(null);
+          }}
+          initialSurvivorId={mergeSurvivorId}
         />
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>

@@ -18,7 +18,7 @@ import {
 } from '@/lib/merchant-profiles/utils';
 import { cn, formatDateTime } from '@/lib/utils';
 import type { MerchantProfile, SystemCategoryOption } from '@/types';
-import { Fingerprint, Tags, X } from 'lucide-react';
+import { Fingerprint, GitMerge, Tags, X } from 'lucide-react';
 
 type WorkspaceTab = 'overview' | 'edit' | 'matching';
 
@@ -26,6 +26,7 @@ interface MerchantProfileWorkspaceProps {
   merchant: MerchantProfile | null;
   systemCategories: SystemCategoryOption[];
   onClose: () => void;
+  onMerge?: (merchant: MerchantProfile) => void;
   initialTab?: WorkspaceTab;
 }
 
@@ -48,6 +49,7 @@ export function MerchantProfileWorkspace({
   merchant,
   systemCategories,
   onClose,
+  onMerge,
   initialTab = 'overview',
 }: MerchantProfileWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab);
@@ -126,7 +128,6 @@ export function MerchantProfileWorkspace({
                 {formatVerificationLevel(merchant.verificationLevel)}
               </Badge>
               <Badge variant="secondary">{merchant.systemCategory.name}</Badge>
-              <Badge variant="outline">{merchant.type}</Badge>
               {needsReview(merchant.verificationLevel) ? (
                 <Badge variant="outline" className="border-amber-500/50 text-amber-700 dark:text-amber-300">
                   Needs review
@@ -218,6 +219,13 @@ export function MerchantProfileWorkspace({
             <p className="text-xs text-[var(--muted-foreground)]">
               Updated {formatDateTime(merchant.updatedAt)} · ID {merchant.id}
             </p>
+
+            {onMerge ? (
+              <Button type="button" variant="outline" className="w-full" onClick={() => onMerge(merchant)}>
+                <GitMerge className="mr-2 h-4 w-4" />
+                Merge with another profile
+              </Button>
+            ) : null}
           </div>
         ) : null}
 

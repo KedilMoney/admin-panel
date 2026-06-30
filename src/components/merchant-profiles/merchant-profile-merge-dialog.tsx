@@ -1,8 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,6 +19,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import {
+  formatIdentifierLabel,
+  getPrimaryIdentifier,
+} from '@/lib/merchant-profiles/utils';
 import type { MerchantProfile, SystemCategoryOption } from '@/types';
 import { useMergeMerchantProfiles } from '@/lib/hooks/useMerchantProfiles';
 import { GitMerge, Loader2 } from 'lucide-react';
@@ -29,7 +32,18 @@ interface MerchantProfileMergeDialogProps {
   systemCategories: SystemCategoryOption[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialSurvivorId?: string | null;
 }
+
+const formatMerchantOption = (merchant: MerchantProfile) => {
+  const identifier = getPrimaryIdentifier(merchant);
+  const idPart = identifier ? ` · ${formatIdentifierLabel(identifier)}` : ' · no payment ID';
+  const name =
+    merchant.canonicalName.length > 48
+      ? `${merchant.canonicalName.slice(0, 48)}…`
+      : merchant.canonicalName;
+  return `${name}${idPart}`;
+};
 
 const formatSubmitError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
@@ -52,6 +66,7 @@ export function MerchantProfileMergeDialog({
   systemCategories,
   open,
   onOpenChange,
+  initialSurvivorId = null,
 }: MerchantProfileMergeDialogProps) {
   const [survivorId, setSurvivorId] = useState('');
   const [duplicateId, setDuplicateId] = useState('');
@@ -60,6 +75,12 @@ export function MerchantProfileMergeDialog({
   const [successMessage, setSuccessMessage] = useState('');
 
   const mergeProfiles = useMergeMerchantProfiles();
+
+  useEffect(() => {
+    if (open && initialSurvivorId) {
+      setSurvivorId(initialSurvivorId);
+    }
+  }, [open, initialSurvivorId]);
 
   const survivor = useMemo(
     () => merchants.find((merchant) => merchant.id === survivorId),
@@ -117,7 +138,7 @@ export function MerchantProfileMergeDialog({
         systemCategoryId: categoriesConflict ? systemCategoryId : null,
       });
       setSuccessMessage(
-        `Merged "${duplicate?.canonicalName}" into "${result.profile?.canonicalName ?? survivor?.canonicalName}".`
+        `Merged successfully. Survivor is now "${result.profile?.canonicalName ?? survivor?.canonicalName}" with all payment IDs and aliases combined.`
       );
       setDuplicateId('');
     } catch (error: unknown) {
@@ -131,22 +152,31 @@ export function MerchantProfileMergeDialog({
         <DialogHeader>
           <DialogTitle>Merge merchant profiles</DialogTitle>
           <DialogDescription>
-            Combine a duplicate profile into a survivor. Aliases, identifiers, and transactions
-            move to the survivor; the duplicate profile is deleted.
+            Use this when the same real-world merchant has multiple profiles (e.g. different UPI
+            IDs). Pick which profile to keep — all payment IDs, aliases, and linked transactions
+            move to it; the other profile is deleted.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-md border border-[var(--border)] bg-[var(--accent)]/30 px-3 py-2 text-xs text-[var(--muted-foreground)]">
+            <strong className="text-[var(--foreground)]">What users see:</strong> past transactions
+            from the duplicate re-link to the survivor. Future payments on any merged UPI ID
+            auto-categorize to the same merchant and category.
+          </div>
+
           <div className="space-y-2">
-            <Label>Survivor profile (kept)</Label>
+            <Label>Keep this profile (survivor)</Label>
             <Select value={survivorId} onValueChange={setSurvivorId}>
               <SelectTrigger>
-                <SelectValue placeholder="Choose survivor" />
+                <SelectValue placeholder="Choose survivor">
+                  {survivor ? formatMerchantOption(survivor) : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {merchants.map((merchant) => (
                   <SelectItem key={merchant.id} value={merchant.id}>
-                    {merchant.canonicalName}
+                    {formatMerchantOption(merchant)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -154,17 +184,19 @@ export function MerchantProfileMergeDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Duplicate profile (removed)</Label>
+            <Label>Merge this duplicate into survivor (removed)</Label>
             <Select value={duplicateId} onValueChange={setDuplicateId}>
               <SelectTrigger>
-                <SelectValue placeholder="Choose duplicate" />
+                <SelectValue placeholder="Choose duplicate">
+                  {duplicate ? formatMerchantOption(duplicate) : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {merchants
                   .filter((merchant) => merchant.id !== survivorId)
                   .map((merchant) => (
                     <SelectItem key={merchant.id} value={merchant.id}>
-                      {merchant.canonicalName}
+                      {formatMerchantOption(merchant)}
                     </SelectItem>
                   ))}
               </SelectContent>
@@ -184,7 +216,7 @@ export function MerchantProfileMergeDialog({
                 <SelectContent>
                   {systemCategories.map((category) => (
                     <SelectItem key={category.id} value={category.id}>
-                      {category.name} ({category.type})
+                      {category.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
