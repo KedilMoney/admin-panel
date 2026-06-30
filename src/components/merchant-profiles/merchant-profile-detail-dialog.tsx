@@ -250,11 +250,34 @@ export function MerchantProfileDetailDialog({
   }
 
   const matchingPanel = (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--accent)]/20 p-3 text-sm text-[var(--muted-foreground)]">
+        <p className="font-medium text-[var(--foreground)]">How matching works</p>
+        <ul className="mt-2 list-inside list-disc space-y-1">
+          <li>
+            <strong>Payment IDs</strong> — UPI addresses, NEFT refs, and account numbers (
+            <code className="text-xs">merchant_identifiers</code>). A profile can have many.
+          </li>
+          <li>
+            <strong>Aliases</strong> — raw bank-statement names (
+            <code className="text-xs">merchant_aliases</code>), not payment IDs.
+          </li>
+          <li>
+            Use <strong>split</strong> (scissors) to move one ID or alias into a new profile; use{' '}
+            <strong>merge</strong> on the Profile tab to combine whole profiles.
+          </li>
+        </ul>
+      </div>
+
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">Payment identifiers</h3>
-          <Badge variant="outline">{identifiers.length}</Badge>
+        <div>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Payment IDs</h3>
+            <Badge variant="outline">{identifiers.length}</Badge>
+          </div>
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+            UPI · NEFT · Account — used to match transactions by payment reference
+          </p>
         </div>
               {identifiers.length > 0 ? (
                 <Table>
@@ -360,9 +383,14 @@ export function MerchantProfileDetailDialog({
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Aliases</h3>
-                <Badge variant="outline">{merchant._count.aliases}</Badge>
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Aliases</h3>
+                  <Badge variant="outline">{merchant._count.aliases}</Badge>
+                </div>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                  Bank-statement display names — e.g. &quot;APOLLO HOSPITALS ENTER CHENNAI TN&quot;
+                </p>
               </div>
 
               {aliases.length > 0 ? (

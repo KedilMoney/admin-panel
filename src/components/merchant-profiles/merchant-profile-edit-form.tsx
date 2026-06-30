@@ -19,8 +19,6 @@ import { useEffect, useState } from 'react';
 export type MerchantProfileEditFormState = {
   canonicalName: string;
   systemCategoryId: string;
-  upiId: string;
-  accountNumber: string;
   confidence: string;
 };
 
@@ -52,8 +50,6 @@ export function MerchantProfileEditForm({
   const [form, setForm] = useState<MerchantProfileEditFormState>({
     canonicalName: merchant.canonicalName,
     systemCategoryId: merchant.systemCategoryId,
-    upiId: merchant.upiId ?? '',
-    accountNumber: merchant.accountNumber ?? '',
     confidence: String(merchant.confidence ?? 0.95),
   });
 
@@ -61,8 +57,6 @@ export function MerchantProfileEditForm({
     setForm({
       canonicalName: merchant.canonicalName,
       systemCategoryId: merchant.systemCategoryId,
-      upiId: merchant.upiId ?? '',
-      accountNumber: merchant.accountNumber ?? '',
       confidence: String(merchant.confidence ?? 0.95),
     });
     setFormError('');
@@ -98,8 +92,6 @@ export function MerchantProfileEditForm({
         payload: {
           canonicalName: form.canonicalName.trim(),
           systemCategoryId: form.systemCategoryId,
-          upiId: form.upiId.trim() || null,
-          accountNumber: form.accountNumber.trim() || null,
           confidence,
         },
       });
@@ -112,8 +104,8 @@ export function MerchantProfileEditForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-sm text-[var(--muted-foreground)]">
-        Update the canonical name, category, and confidence. UPI/account fields sync into{' '}
-        <code className="text-xs">merchant_identifiers</code> on save.
+        The <strong>canonical name</strong> is what users see. Add UPI / NEFT / account numbers on
+        the <strong>Payment IDs &amp; aliases</strong> tab.
       </p>
 
       <div className="space-y-2">
@@ -147,41 +139,18 @@ export function MerchantProfileEditForm({
         </Select>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="edit-merchant-upi">Primary UPI (optional)</Label>
-          <Input
-            id="edit-merchant-upi"
-            value={form.upiId}
-            onChange={(event) => setForm((current) => ({ ...current, upiId: event.target.value }))}
-            placeholder="shop@okhdfcbank"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="edit-merchant-confidence">Confidence (0–1)</Label>
-          <Input
-            id="edit-merchant-confidence"
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
-            value={form.confidence}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, confidence: event.target.value }))
-            }
-          />
-        </div>
-      </div>
-
       <div className="space-y-2">
-        <Label htmlFor="edit-merchant-account">Account number (optional)</Label>
+        <Label htmlFor="edit-merchant-confidence">Confidence (0–1)</Label>
         <Input
-          id="edit-merchant-account"
-          value={form.accountNumber}
+          id="edit-merchant-confidence"
+          type="number"
+          min="0"
+          max="1"
+          step="0.01"
+          value={form.confidence}
           onChange={(event) =>
-            setForm((current) => ({ ...current, accountNumber: event.target.value }))
+            setForm((current) => ({ ...current, confidence: event.target.value }))
           }
-          placeholder="Bank account reference"
         />
       </div>
 
