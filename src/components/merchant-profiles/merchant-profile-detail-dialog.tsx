@@ -30,6 +30,10 @@ import {
   useSplitMerchantAlias,
   useSplitMerchantIdentifier,
 } from '@/lib/hooks/useMerchantProfiles';
+import {
+  formatVerificationLevel,
+  parseMerchantTags,
+} from '@/lib/merchant-profiles/utils';
 import { formatDateTime } from '@/lib/utils';
 import type { MerchantProfile, SystemCategoryOption } from '@/types';
 import { Loader2, Plus, Scissors, Trash2 } from 'lucide-react';
@@ -95,6 +99,8 @@ export function MerchantProfileDetailDialog({
 
   const aliases = merchant?.aliases ?? [];
   const identifiers = merchant?.identifiers ?? [];
+  const tags = parseMerchantTags(merchant?.tags);
+  const categoryVotes = merchant?.categoryVotes ?? [];
 
   const handleAddAlias = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -263,15 +269,17 @@ export function MerchantProfileDetailDialog({
                   {merchant.type}
                 </Badge>
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                  Verification
-                </p>
-                <p className="mt-1 font-medium">{merchant.verificationLevel.replaceAll('_', ' ')}</p>
-                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                  Confidence {merchant.confidence.toFixed(2)} · {merchant.seenCount} sightings
-                </p>
-              </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                Verification
+              </p>
+              <p className="mt-1 font-medium">
+                {formatVerificationLevel(merchant.verificationLevel)}
+              </p>
+              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                Confidence {merchant.confidence.toFixed(2)} · {merchant.seenCount} sightings
+              </p>
+            </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
                   Linked transactions
@@ -285,6 +293,36 @@ export function MerchantProfileDetailDialog({
                 <p className="mt-1 font-medium">{formatDateTime(merchant.updatedAt)}</p>
               </div>
             </div>
+
+            {(tags.length > 0 || categoryVotes.length > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {tags.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border border-[var(--border)] p-4">
+                    <h3 className="text-sm font-semibold">Taxonomy tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag) => (
+                        <Badge key={tag.value} variant={tag.isPrimary ? 'default' : 'outline'}>
+                          {tag.value} ×{tag.count}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {categoryVotes.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border border-[var(--border)] p-4">
+                    <h3 className="text-sm font-semibold">Category votes</h3>
+                    <div className="space-y-2">
+                      {categoryVotes.map((vote) => (
+                        <div key={vote.id} className="flex items-center justify-between text-sm">
+                          <span>{vote.systemCategory.name}</span>
+                          <Badge variant="secondary">{vote.points} pts</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">

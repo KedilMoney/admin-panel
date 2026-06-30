@@ -214,6 +214,18 @@ export interface ExpertFormData {
   agencyWebsite: string;
 }
 
+export interface MerchantTag {
+  value: string;
+  count: number;
+  isPrimary: boolean;
+}
+
+export interface MerchantCategoryVote {
+  id: string;
+  points: number;
+  systemCategory: SystemCategoryOption;
+}
+
 export interface MerchantAlias {
   id: string;
   rawName: string;
@@ -234,6 +246,7 @@ export interface MerchantProfile {
   upiId?: string | null;
   accountNumber?: string | null;
   type: string;
+  tags?: MerchantTag[] | unknown;
   confidence: number;
   verificationLevel: string;
   seenCount: number;
@@ -241,6 +254,7 @@ export interface MerchantProfile {
   updatedAt: string;
   systemCategoryId: string;
   systemCategory: SystemCategoryOption;
+  categoryVotes?: MerchantCategoryVote[];
   aliases?: MerchantAlias[];
   identifiers?: MerchantIdentifier[];
   _count: {

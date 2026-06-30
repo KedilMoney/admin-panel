@@ -24,17 +24,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   useCreateMerchantProfile,
   useMerchantProfiles,
   useRunMerchantMergeJob,
   useUpdateMerchantProfile,
 } from '@/lib/hooks/useMerchantProfiles';
-import { formatDateTime } from '@/lib/utils';
+import {
+  formatIdentifierLabel,
+  formatVerificationLevel,
+  getIdentifierCount,
+  getPrimaryIdentifier,
+  getTopAliases,
+  getVerificationTone,
+  hasPaymentIdentifiers,
+  needsReview,
+  parseMerchantTags,
+  VERIFICATION_LEVELS,
+  type VerificationLevelFilter,
+} from '@/lib/merchant-profiles/utils';
+import { cn, formatDateTime } from '@/lib/utils';
 import type { MerchantProfile } from '@/types';
-import { Edit, Eye, GitMerge, Plus, RefreshCw, Search, Store } from 'lucide-react';
+import {
+  AlertCircle,
+  GitMerge,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+} from 'lucide-react';
 import { MerchantProfileDetailDialog } from '@/components/merchant-profiles/merchant-profile-detail-dialog';
+import { MerchantProfileInspector } from '@/components/merchant-profiles/merchant-profile-inspector';
 import { MerchantProfileMergeDialog } from '@/components/merchant-profiles/merchant-profile-merge-dialog';
 
 type MerchantProfileFormState = {
@@ -53,28 +73,12 @@ const INITIAL_FORM: MerchantProfileFormState = {
   confidence: '0.95',
 };
 
-const getTypeBadgeVariant = (type: string) => {
-  const normalized = type.toLowerCase();
-  if (normalized === 'need') return 'success' as const;
-  if (normalized === 'want') return 'warning' as const;
-  return 'secondary' as const;
+const trustRowClass: Record<ReturnType<typeof getVerificationTone>, string> = {
+  trusted: 'border-l-green-500',
+  high: 'border-l-blue-500',
+  medium: 'border-l-amber-500',
+  low: 'border-l-red-500',
 };
-
-const getVerificationBadgeVariant = (level: string) => {
-  if (level === 'multi_user_confirmed' || level === 'user_confirmed') {
-    return 'success' as const;
-  }
-  if (level === 'llm_high') {
-    return 'secondary' as const;
-  }
-  return 'outline' as const;
-};
-
-const formatVerificationLevel = (value: string) =>
-  value
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 
 const buildPayload = (form: MerchantProfileFormState) => ({
   canonicalName: form.canonicalName.trim(),
@@ -92,19 +96,19 @@ const formatSubmitError = (error: unknown) => {
       'Unable to save merchant profile.'
     );
   }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
+  if (error instanceof Error) return error.message;
   return 'Unable to save merchant profile.';
 };
 
 export default function MerchantMasterPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [verificationFilter, setVerificationFilter] = useState<VerificationLevelFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [reviewOnly, setReviewOnly] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingMerchant, setEditingMerchant] = useState<MerchantProfile | null>(null);
   const [detailMerchant, setDetailMerchant] = useState<MerchantProfile | null>(null);
   const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
@@ -119,23 +123,46 @@ export default function MerchantMasterPage() {
   const merchants = useMemo(() => data?.merchants ?? [], [data]);
   const systemCategories = useMemo(() => data?.systemCategories ?? [], [data]);
 
+  const filteredMerchants = useMemo(() => {
+    return merchants.filter((merchant) => {
+      if (reviewOnly && !needsReview(merchant.verificationLevel)) return false;
+      if (verificationFilter !== 'all' && merchant.verificationLevel !== verificationFilter) {
+        return false;
+      }
+      if (categoryFilter !== 'all' && merchant.systemCategoryId !== categoryFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [merchants, reviewOnly, verificationFilter, categoryFilter]);
+
+  const selectedMerchant = useMemo(
+    () => filteredMerchants.find((merchant) => merchant.id === selectedId) ?? null,
+    [filteredMerchants, selectedId]
+  );
+
   const summary = useMemo(
     () => ({
       total: merchants.length,
+      needsReview: merchants.filter((merchant) => needsReview(merchant.verificationLevel)).length,
       confirmed: merchants.filter((merchant) =>
         ['user_confirmed', 'multi_user_confirmed'].includes(merchant.verificationLevel)
       ).length,
-      withUpi: merchants.filter((merchant) => merchant.upiId).length,
+      withIdentifiers: merchants.filter(hasPaymentIdentifiers).length,
     }),
     [merchants]
   );
 
   useEffect(() => {
+    if (!selectedId && filteredMerchants.length > 0) {
+      setSelectedId(filteredMerchants[0].id);
+    }
+  }, [filteredMerchants, selectedId]);
+
+  useEffect(() => {
     if (!isDetailOpen || !detailMerchant) return;
     const fresh = merchants.find((merchant) => merchant.id === detailMerchant.id);
-    if (fresh) {
-      setDetailMerchant(fresh);
-    }
+    if (fresh) setDetailMerchant(fresh);
   }, [merchants, detailMerchant, isDetailOpen]);
 
   const selectedCategory = useMemo(
@@ -197,7 +224,6 @@ export default function MerchantMasterPage() {
       setIsDialogOpen(true);
       return;
     }
-
     closeDialog();
   };
 
@@ -209,7 +235,6 @@ export default function MerchantMasterPage() {
       setFormError('Merchant name is required.');
       return;
     }
-
     if (!form.systemCategoryId) {
       setFormError('Please choose a system category.');
       return;
@@ -274,16 +299,16 @@ export default function MerchantMasterPage() {
   return (
     <AuthGuard>
       <AdminLayout>
-        <div className="space-y-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-[var(--foreground)]">Merchant Profiles</h1>
-              <p className="mt-2 text-[var(--muted-foreground)]">
-                Manage canonical merchant names and their auto-categorization mapping from the
-                database.
+              <p className="mt-2 max-w-2xl text-[var(--muted-foreground)]">
+                Inspect auto-categorization data from production tables: canonical names,
+                merchant_identifiers, aliases, taxonomy tags, and category votes.
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button onClick={() => setIsMergeOpen(true)} variant="outline" size="sm">
                 <GitMerge className="mr-2 h-4 w-4" />
                 Merge profiles
@@ -303,176 +328,211 @@ export default function MerchantMasterPage() {
               </Button>
               <Button onClick={openCreateDialog} size="sm">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Merchant
+                Add merchant
               </Button>
             </div>
           </div>
 
           {mergeMessage ? (
-            <div className="rounded-md border border-[var(--border)] bg-[var(--accent)] px-4 py-3 text-sm text-[var(--foreground)]">
+            <div className="rounded-md border border-[var(--border)] bg-[var(--accent)] px-4 py-3 text-sm">
               {mergeMessage}
             </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Total merchant profiles</CardDescription>
-                <CardTitle className="text-3xl">{summary.total}</CardTitle>
+                <CardDescription>Total profiles</CardDescription>
+                <CardTitle className="text-2xl">{summary.total}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Confirmed mappings</CardDescription>
-                <CardTitle className="text-3xl">{summary.confirmed}</CardTitle>
+                <CardDescription>Needs review (LLM low/medium)</CardDescription>
+                <CardTitle className="text-2xl text-amber-700 dark:text-amber-300">
+                  {summary.needsReview}
+                </CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardDescription>Profiles with UPI IDs</CardDescription>
-                <CardTitle className="text-3xl">{summary.withUpi}</CardTitle>
+                <CardDescription>User confirmed</CardDescription>
+                <CardTitle className="text-2xl">{summary.confirmed}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardDescription>With payment identifiers</CardDescription>
+                <CardTitle className="text-2xl">{summary.withIdentifiers}</CardTitle>
               </CardHeader>
             </Card>
           </div>
 
-          <Card>
-            <CardContent className="pt-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search by merchant, UPI ID, account number, or category..."
-                  className="pl-10"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="border-b border-[var(--border)]">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-xl">Database merchant mappings</CardTitle>
-                  <CardDescription>
-                    Clean merchant naming with category assignment and verification details.
-                  </CardDescription>
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <Card className="overflow-hidden">
+              <CardHeader className="space-y-4 border-b border-[var(--border)] pb-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg">Browse profiles</CardTitle>
+                    <CardDescription>
+                      {filteredMerchants.length} shown · search hits name, alias, identifier, category
+                    </CardDescription>
+                  </div>
+                  {selectedMerchant ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openDetailDialog(selectedMerchant)}
+                    >
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      Manage aliases &amp; IDs
+                    </Button>
+                  ) : null}
                 </div>
-                <Badge variant="secondary">{merchants.length}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Merchant</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Verification</TableHead>
-                    <TableHead>Usage</TableHead>
-                    <TableHead>Updated</TableHead>
-                    <TableHead className="w-24 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {merchants.length > 0 ? (
-                    merchants.map((merchant) => (
-                      <TableRow key={merchant.id}>
-                        <TableCell>
-                          <div className="flex items-start gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-[var(--accent-foreground)]">
-                              <Store className="h-5 w-5" />
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search canonical name, alias, UPI/NEFT/account, category..."
+                    className="pl-10"
+                  />
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Select
+                    value={verificationFilter}
+                    onValueChange={(value) =>
+                      setVerificationFilter(value as VerificationLevelFilter)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Trust level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All trust levels</SelectItem>
+                      {VERIFICATION_LEVELS.map((level) => (
+                        <SelectItem key={level} value={level}>
+                          {formatVerificationLevel(level)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {systemCategories.map((category) => (
+                        <SelectItem key={category.id} value={category.id}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Button
+                    type="button"
+                    variant={reviewOnly ? 'default' : 'outline'}
+                    onClick={() => setReviewOnly((current) => !current)}
+                    className="justify-start"
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4" />
+                    Review queue only
+                  </Button>
+                </div>
+              </CardHeader>
+
+              <CardContent className="max-h-[68vh] overflow-y-auto p-0">
+                {filteredMerchants.length > 0 ? (
+                  <div className="divide-y divide-[var(--border)]">
+                    {filteredMerchants.map((merchant) => {
+                      const primaryIdentifier = getPrimaryIdentifier(merchant);
+                      const topAliases = getTopAliases(merchant, 2);
+                      const tags = parseMerchantTags(merchant.tags);
+                      const primaryTag = tags.find((tag) => tag.isPrimary) ?? tags[0];
+                      const tone = getVerificationTone(merchant.verificationLevel);
+                      const isSelected = merchant.id === selectedId;
+
+                      return (
+                        <button
+                          key={merchant.id}
+                          type="button"
+                          onClick={() => setSelectedId(merchant.id)}
+                          className={cn(
+                            'w-full border-l-4 px-4 py-3 text-left transition-colors hover:bg-[var(--accent)]/50',
+                            trustRowClass[tone],
+                            isSelected && 'bg-[var(--accent)]'
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate font-semibold">{merchant.canonicalName}</p>
+                              <p className="truncate text-xs text-[var(--muted-foreground)]">
+                                {merchant.systemCategory.name} · {merchant.type}
+                              </p>
                             </div>
-                            <div className="space-y-1">
-                              <div className="font-semibold text-[var(--foreground)]">
-                                {merchant.canonicalName}
-                              </div>
-                              <div className="text-xs text-[var(--muted-foreground)]">
-                                {merchant.identifiers && merchant.identifiers.length > 0
-                                  ? `${merchant.identifiers.length} payment ID(s)`
-                                  : merchant.upiId
-                                    ? `UPI: ${merchant.upiId}`
-                                    : merchant.accountNumber
-                                      ? `A/C: ${merchant.accountNumber}`
-                                      : 'No linked payee identifier'}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{merchant.systemCategory.name}</div>
-                          <div className="text-xs text-[var(--muted-foreground)]">
-                            {merchant.accountNumber
-                              ? `Account: ${merchant.accountNumber}`
-                              : 'UPI-led mapping'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getTypeBadgeVariant(merchant.type)}>{merchant.type}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-1">
-                            <Badge variant={getVerificationBadgeVariant(merchant.verificationLevel)}>
-                              {formatVerificationLevel(merchant.verificationLevel)}
+                            <Badge variant="outline" className="shrink-0 text-[10px]">
+                              {merchant.confidence.toFixed(2)}
                             </Badge>
-                            <div className="text-xs text-[var(--muted-foreground)]">
-                              Confidence {merchant.confidence.toFixed(2)}
+                          </div>
+
+                          <div className="mt-2 space-y-2">
+                            {primaryIdentifier ? (
+                              <p className="truncate font-mono text-xs text-[var(--foreground)]">
+                                {formatIdentifierLabel(primaryIdentifier)}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-[var(--muted-foreground)]">No payment ID</p>
+                            )}
+
+                            <div className="flex flex-wrap gap-1.5">
+                              <Badge variant="secondary" className="text-[10px]">
+                                {formatVerificationLevel(merchant.verificationLevel)}
+                              </Badge>
+                              {primaryTag ? (
+                                <Badge variant="outline" className="max-w-[140px] truncate text-[10px]">
+                                  {primaryTag.value}
+                                </Badge>
+                              ) : null}
+                              {topAliases.map((alias) => (
+                                <Badge
+                                  key={alias.id}
+                                  variant="outline"
+                                  className="max-w-[120px] truncate text-[10px]"
+                                >
+                                  {alias.rawName}
+                                </Badge>
+                              ))}
                             </div>
+
+                            <p className="text-[11px] text-[var(--muted-foreground)]">
+                              {merchant._count.aliases} aliases · {getIdentifierCount(merchant)} IDs ·{' '}
+                              {merchant._count.transactions} txns · {formatDateTime(merchant.updatedAt)}
+                            </p>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div>{merchant.seenCount} sightings</div>
-                            <div className="text-xs text-[var(--muted-foreground)]">
-                              {merchant._count.aliases} aliases
-                              {merchant._count.identifiers != null
-                                ? `, ${merchant._count.identifiers} IDs`
-                                : ''}
-                              , {merchant._count.transactions} transactions
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-sm text-[var(--muted-foreground)]">
-                          {formatDateTime(merchant.updatedAt)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => openDetailDialog(merchant)}
-                              title="View merchant profile"
-                            >
-                              <Eye className="h-4 w-4 text-[var(--muted-foreground)]" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => openEditDialog(merchant)}
-                              title="Edit merchant profile"
-                            >
-                              <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="py-12 text-center text-[var(--muted-foreground)]"
-                      >
-                        No merchant profiles found.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-4 py-16 text-center text-sm text-[var(--muted-foreground)]">
+                    No merchant profiles match your filters.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <MerchantProfileInspector
+              merchant={selectedMerchant}
+              onEdit={openEditDialog}
+              onManage={openDetailDialog}
+            />
+          </div>
         </div>
 
         <MerchantProfileDetailDialog
@@ -497,14 +557,14 @@ export default function MerchantMasterPage() {
                 {editingMerchant ? 'Edit Merchant Profile' : 'Create Merchant Profile'}
               </DialogTitle>
               <DialogDescription>
-                Maintain a clean canonical merchant name and link it to the correct system
-                category for auto-categorization.
+                Updates canonical name, legacy UPI/account fields, and system category. Identifiers
+                are synced into merchant_identifiers on save.
               </DialogDescription>
             </DialogHeader>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="merchant-name">Merchant name</Label>
+                <Label htmlFor="merchant-name">Canonical name</Label>
                 <Input
                   id="merchant-name"
                   value={form.canonicalName}
@@ -518,7 +578,7 @@ export default function MerchantMasterPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="merchant-upi">UPI ID</Label>
+                  <Label htmlFor="merchant-upi">UPI ID (syncs to identifiers)</Label>
                   <Input
                     id="merchant-upi"
                     value={form.upiId}
@@ -602,10 +662,10 @@ export default function MerchantMasterPage() {
                   {editingMerchant
                     ? updateMerchant.isPending
                       ? 'Saving...'
-                      : 'Save Changes'
+                      : 'Save changes'
                     : createMerchant.isPending
                       ? 'Creating...'
-                      : 'Create Merchant'}
+                      : 'Create merchant'}
                 </Button>
               </DialogFooter>
             </form>
