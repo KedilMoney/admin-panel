@@ -2,7 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   merchantProfilesApi,
   type AddMerchantAliasPayload,
+  type AddMerchantIdentifierPayload,
+  type MergeMerchantProfilesPayload,
   type MerchantProfilePayload,
+  type SplitMerchantPayload,
 } from '@/lib/api/merchantProfiles';
 
 export const merchantProfilesQueryKey = ['merchant-profiles'] as const;
@@ -74,6 +77,86 @@ export const useRunMerchantMergeJob = () => {
 
   return useMutation({
     mutationFn: () => merchantProfilesApi.runMergeJob(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+    },
+  });
+};
+
+export const useAddMerchantIdentifier = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      payload,
+    }: {
+      profileId: string;
+      payload: AddMerchantIdentifierPayload;
+    }) => merchantProfilesApi.addIdentifier(profileId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+    },
+  });
+};
+
+export const useRemoveMerchantIdentifier = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      identifierId,
+    }: {
+      profileId: string;
+      identifierId: string;
+    }) => merchantProfilesApi.removeIdentifier(profileId, identifierId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+    },
+  });
+};
+
+export const useMergeMerchantProfiles = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: MergeMerchantProfilesPayload) =>
+      merchantProfilesApi.mergeProfiles(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+    },
+  });
+};
+
+export const useSplitMerchantAlias = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      payload,
+    }: {
+      profileId: string;
+      payload: SplitMerchantPayload;
+    }) => merchantProfilesApi.splitAlias(profileId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+    },
+  });
+};
+
+export const useSplitMerchantIdentifier = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      profileId,
+      payload,
+    }: {
+      profileId: string;
+      payload: SplitMerchantPayload;
+    }) => merchantProfilesApi.splitIdentifier(profileId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
     },

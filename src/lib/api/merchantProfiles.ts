@@ -23,6 +23,40 @@ export interface AddMerchantAliasPayload {
   bankSource?: string | null;
 }
 
+export interface AddMerchantIdentifierPayload {
+  type: 'UPI' | 'NEFT' | 'ACCOUNT';
+  value: string;
+}
+
+export interface MergeMerchantProfilesPayload {
+  survivorId: string;
+  duplicateId: string;
+  systemCategoryId?: string | null;
+}
+
+export interface SplitMerchantPayload {
+  aliasId?: string;
+  identifierId?: string;
+  canonicalName: string;
+  systemCategoryId: string;
+}
+
+export interface MergeMerchantProfilesResult {
+  survivorId: string;
+  duplicateId: string;
+  profile: MerchantProfile;
+}
+
+export interface SplitMerchantResult {
+  sourceProfileId: string;
+  newProfile: MerchantProfile;
+}
+
+export interface RemoveMerchantIdentifierResult {
+  deleted: boolean;
+  wasLastIdentifier: boolean;
+}
+
 export const merchantProfilesApi = {
   getAll: async (search?: string): Promise<MerchantProfilesResponse> => {
     const queryParams = new URLSearchParams();
@@ -68,6 +102,48 @@ export const merchantProfilesApi = {
   runMergeJob: async (): Promise<MerchantMergeJobResult> => {
     const response = await api.post<MerchantMergeJobResult>(
       '/api/admin/merchant-profiles/merge-job'
+    );
+    return response.data.data;
+  },
+
+  addIdentifier: async (
+    profileId: string,
+    payload: AddMerchantIdentifierPayload
+  ) => {
+    const response = await api.post(
+      `/api/admin/merchant-profiles/${profileId}/identifiers`,
+      payload
+    );
+    return response.data.data;
+  },
+
+  removeIdentifier: async (profileId: string, identifierId: string) => {
+    const response = await api.delete<RemoveMerchantIdentifierResult>(
+      `/api/admin/merchant-profiles/${profileId}/identifiers/${identifierId}`
+    );
+    return response.data.data;
+  },
+
+  mergeProfiles: async (payload: MergeMerchantProfilesPayload) => {
+    const response = await api.post<MergeMerchantProfilesResult>(
+      '/api/admin/merchant-profiles/merge',
+      payload
+    );
+    return response.data.data;
+  },
+
+  splitAlias: async (profileId: string, payload: SplitMerchantPayload) => {
+    const response = await api.post<SplitMerchantResult>(
+      `/api/admin/merchant-profiles/${profileId}/split-alias`,
+      payload
+    );
+    return response.data.data;
+  },
+
+  splitIdentifier: async (profileId: string, payload: SplitMerchantPayload) => {
+    const response = await api.post<SplitMerchantResult>(
+      `/api/admin/merchant-profiles/${profileId}/split-identifier`,
+      payload
     );
     return response.data.data;
   },

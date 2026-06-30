@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
@@ -35,6 +35,7 @@ import { formatDateTime } from '@/lib/utils';
 import type { MerchantProfile } from '@/types';
 import { Edit, Eye, GitMerge, Plus, RefreshCw, Search, Store } from 'lucide-react';
 import { MerchantProfileDetailDialog } from '@/components/merchant-profiles/merchant-profile-detail-dialog';
+import { MerchantProfileMergeDialog } from '@/components/merchant-profiles/merchant-profile-merge-dialog';
 
 type MerchantProfileFormState = {
   canonicalName: string;
@@ -103,6 +104,7 @@ export default function MerchantMasterPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [editingMerchant, setEditingMerchant] = useState<MerchantProfile | null>(null);
   const [detailMerchant, setDetailMerchant] = useState<MerchantProfile | null>(null);
   const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
@@ -127,6 +129,14 @@ export default function MerchantMasterPage() {
     }),
     [merchants]
   );
+
+  useEffect(() => {
+    if (!isDetailOpen || !detailMerchant) return;
+    const fresh = merchants.find((merchant) => merchant.id === detailMerchant.id);
+    if (fresh) {
+      setDetailMerchant(fresh);
+    }
+  }, [merchants, detailMerchant, isDetailOpen]);
 
   const selectedCategory = useMemo(
     () => systemCategories.find((category) => category.id === form.systemCategoryId),
@@ -274,6 +284,10 @@ export default function MerchantMasterPage() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button onClick={() => setIsMergeOpen(true)} variant="outline" size="sm">
+                <GitMerge className="mr-2 h-4 w-4" />
+                Merge profiles
+              </Button>
               <Button
                 onClick={handleRunMergeJob}
                 variant="outline"
@@ -463,9 +477,17 @@ export default function MerchantMasterPage() {
 
         <MerchantProfileDetailDialog
           merchant={detailMerchant}
+          systemCategories={systemCategories}
           open={isDetailOpen}
           onOpenChange={setIsDetailOpen}
           onEdit={openEditDialog}
+        />
+
+        <MerchantProfileMergeDialog
+          merchants={merchants}
+          systemCategories={systemCategories}
+          open={isMergeOpen}
+          onOpenChange={setIsMergeOpen}
         />
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
