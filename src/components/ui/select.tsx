@@ -50,7 +50,7 @@ const Select = ({ value, onValueChange, children, disabled }: SelectProps) => {
       </div>
       {open && !disabled && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 z-[100]"
           onClick={() => setOpen(false)}
         />
       )}
@@ -90,7 +90,7 @@ const SelectContent = React.forwardRef<HTMLDivElement, SelectContentProps>(
       <div
         ref={ref}
         className={cn(
-          "absolute z-50 min-w-[8rem] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--popover)] text-popover-foreground shadow-md mt-1 w-full",
+          "absolute z-[110] min-w-[8rem] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] shadow-lg mt-1 w-full",
           className
         )}
         {...props}

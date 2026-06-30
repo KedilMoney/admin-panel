@@ -28,8 +28,8 @@ import {
   useCreateMerchantProfile,
   useMerchantProfiles,
   useRunMerchantMergeJob,
-  useUpdateMerchantProfile,
 } from '@/lib/hooks/useMerchantProfiles';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import {
   formatIdentifierLabel,
   formatVerificationLevel,
@@ -48,14 +48,13 @@ import type { MerchantProfile } from '@/types';
 import {
   AlertCircle,
   GitMerge,
+  Loader2,
   Plus,
   RefreshCw,
   Search,
-  Settings2,
 } from 'lucide-react';
-import { MerchantProfileDetailDialog } from '@/components/merchant-profiles/merchant-profile-detail-dialog';
-import { MerchantProfileInspector } from '@/components/merchant-profiles/merchant-profile-inspector';
 import { MerchantProfileMergeDialog } from '@/components/merchant-profiles/merchant-profile-merge-dialog';
+import { MerchantProfileWorkspace } from '@/components/merchant-profiles/merchant-profile-workspace';
 
 type MerchantProfileFormState = {
   canonicalName: string;
@@ -106,18 +105,17 @@ export default function MerchantMasterPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [reviewOnly, setReviewOnly] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editingMerchant, setEditingMerchant] = useState<MerchantProfile | null>(null);
-  const [detailMerchant, setDetailMerchant] = useState<MerchantProfile | null>(null);
   const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
   const [formError, setFormError] = useState('');
   const [mergeMessage, setMergeMessage] = useState('');
 
-  const { data, isLoading, error, refetch, isFetching } = useMerchantProfiles(searchQuery);
+  const debouncedSearch = useDebounce(searchQuery, 400);
+  const { data, isLoading, error, refetch, isFetching } = useMerchantProfiles(
+    debouncedSearch.trim() || undefined
+  );
   const createMerchant = useCreateMerchantProfile();
-  const updateMerchant = useUpdateMerchantProfile();
   const runMergeJob = useRunMerchantMergeJob();
 
   const merchants = useMemo(() => data?.merchants ?? [], [data]);
@@ -136,10 +134,20 @@ export default function MerchantMasterPage() {
     });
   }, [merchants, reviewOnly, verificationFilter, categoryFilter]);
 
-  const selectedMerchant = useMemo(
-    () => filteredMerchants.find((merchant) => merchant.id === selectedId) ?? null,
-    [filteredMerchants, selectedId]
-  );
+  const selectedMerchant = useMemo(() => {
+    if (!selectedId) return null;
+    return merchants.find((merchant) => merchant.id === selectedId) ?? null;
+  }, [merchants, selectedId]);
+
+  const verificationFilterLabel =
+    verificationFilter === 'all'
+      ? 'All trust levels'
+      : formatVerificationLevel(verificationFilter);
+
+  const categoryFilterLabel =
+    categoryFilter === 'all'
+      ? 'All categories'
+      : (systemCategories.find((category) => category.id === categoryFilter)?.name ?? 'Category');
 
   const summary = useMemo(
     () => ({
@@ -153,17 +161,11 @@ export default function MerchantMasterPage() {
     [merchants]
   );
 
-  useEffect(() => {
-    if (!selectedId && filteredMerchants.length > 0) {
-      setSelectedId(filteredMerchants[0].id);
-    }
-  }, [filteredMerchants, selectedId]);
-
-  useEffect(() => {
-    if (!isDetailOpen || !detailMerchant) return;
-    const fresh = merchants.find((merchant) => merchant.id === detailMerchant.id);
-    if (fresh) setDetailMerchant(fresh);
-  }, [merchants, detailMerchant, isDetailOpen]);
+  const openCreateDialog = () => {
+    setForm(INITIAL_FORM);
+    setFormError('');
+    setIsDialogOpen(true);
+  };
 
   const selectedCategory = useMemo(
     () => systemCategories.find((category) => category.id === form.systemCategoryId),
@@ -173,32 +175,6 @@ export default function MerchantMasterPage() {
   const selectedCategoryLabel = selectedCategory
     ? `${selectedCategory.name} (${selectedCategory.type})`
     : undefined;
-
-  const openCreateDialog = () => {
-    setEditingMerchant(null);
-    setForm(INITIAL_FORM);
-    setFormError('');
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (merchant: MerchantProfile) => {
-    setIsDetailOpen(false);
-    setEditingMerchant(merchant);
-    setForm({
-      canonicalName: merchant.canonicalName,
-      systemCategoryId: merchant.systemCategoryId,
-      upiId: merchant.upiId ?? '',
-      accountNumber: merchant.accountNumber ?? '',
-      confidence: String(merchant.confidence ?? 0.95),
-    });
-    setFormError('');
-    setIsDialogOpen(true);
-  };
-
-  const openDetailDialog = (merchant: MerchantProfile) => {
-    setDetailMerchant(merchant);
-    setIsDetailOpen(true);
-  };
 
   const handleRunMergeJob = async () => {
     setMergeMessage('');
@@ -214,7 +190,6 @@ export default function MerchantMasterPage() {
 
   const closeDialog = () => {
     setIsDialogOpen(false);
-    setEditingMerchant(null);
     setForm(INITIAL_FORM);
     setFormError('');
   };
@@ -247,14 +222,7 @@ export default function MerchantMasterPage() {
     }
 
     try {
-      if (editingMerchant) {
-        await updateMerchant.mutateAsync({
-          id: editingMerchant.id,
-          payload: buildPayload(form),
-        });
-      } else {
-        await createMerchant.mutateAsync(buildPayload(form));
-      }
+      await createMerchant.mutateAsync(buildPayload(form));
       closeDialog();
     } catch (submitError: unknown) {
       setFormError(formatSubmitError(submitError));
@@ -368,27 +336,21 @@ export default function MerchantMasterPage() {
             </Card>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div
+            className={cn(
+              'grid gap-4',
+              selectedId ? 'xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : 'xl:grid-cols-1'
+            )}
+          >
             <Card className="overflow-hidden">
-              <CardHeader className="space-y-4 border-b border-[var(--border)] pb-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-lg">Browse profiles</CardTitle>
-                    <CardDescription>
-                      {filteredMerchants.length} shown · search hits name, alias, identifier, category
-                    </CardDescription>
-                  </div>
-                  {selectedMerchant ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openDetailDialog(selectedMerchant)}
-                    >
-                      <Settings2 className="mr-2 h-4 w-4" />
-                      Manage aliases &amp; IDs
-                    </Button>
-                  ) : null}
+              <CardHeader className="relative z-20 space-y-4 border-b border-[var(--border)] bg-[var(--background)] pb-4">
+                <div>
+                  <CardTitle className="text-lg">Browse profiles</CardTitle>
+                  <CardDescription>
+                    {filteredMerchants.length} shown
+                    {searchQuery !== debouncedSearch ? ' · searching…' : ''}
+                    {isFetching && searchQuery === debouncedSearch ? ' · updating…' : ''}
+                  </CardDescription>
                 </div>
 
                 <div className="relative">
@@ -396,54 +358,66 @@ export default function MerchantMasterPage() {
                   <Input
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search canonical name, alias, UPI/NEFT/account, category..."
+                    placeholder="Search name, alias, UPI, account, category…"
                     className="pl-10"
                   />
+                  {searchQuery !== debouncedSearch ? (
+                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--muted-foreground)]" />
+                  ) : null}
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Select
-                    value={verificationFilter}
-                    onValueChange={(value) =>
-                      setVerificationFilter(value as VerificationLevelFilter)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Trust level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All trust levels</SelectItem>
-                      {VERIFICATION_LEVELS.map((level) => (
-                        <SelectItem key={level} value={level}>
-                          {formatVerificationLevel(level)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-[var(--muted-foreground)]">Trust level</Label>
+                    <Select
+                      value={verificationFilter}
+                      onValueChange={(value) =>
+                        setVerificationFilter(value as VerificationLevelFilter)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue>{verificationFilterLabel}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All trust levels</SelectItem>
+                        {VERIFICATION_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>
+                            {formatVerificationLevel(level)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All categories</SelectItem>
-                      {systemCategories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-[var(--muted-foreground)]">Category</Label>
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger>
+                        <SelectValue>{categoryFilterLabel}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All categories</SelectItem>
+                        {systemCategories.map((category) => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                  <Button
-                    type="button"
-                    variant={reviewOnly ? 'default' : 'outline'}
-                    onClick={() => setReviewOnly((current) => !current)}
-                    className="justify-start"
-                  >
-                    <AlertCircle className="mr-2 h-4 w-4" />
-                    Review queue only
-                  </Button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-[var(--muted-foreground)]">Quick filter</Label>
+                    <Button
+                      type="button"
+                      variant={reviewOnly ? 'default' : 'outline'}
+                      onClick={() => setReviewOnly((current) => !current)}
+                      className="w-full justify-start"
+                    >
+                      <AlertCircle className="mr-2 h-4 w-4" />
+                      Review queue only
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
 
@@ -527,21 +501,15 @@ export default function MerchantMasterPage() {
               </CardContent>
             </Card>
 
-            <MerchantProfileInspector
-              merchant={selectedMerchant}
-              onEdit={openEditDialog}
-              onManage={openDetailDialog}
-            />
+            {selectedId && selectedMerchant ? (
+              <MerchantProfileWorkspace
+                merchant={selectedMerchant}
+                systemCategories={systemCategories}
+                onClose={() => setSelectedId(null)}
+              />
+            ) : null}
           </div>
         </div>
-
-        <MerchantProfileDetailDialog
-          merchant={detailMerchant}
-          systemCategories={systemCategories}
-          open={isDetailOpen}
-          onOpenChange={setIsDetailOpen}
-          onEdit={openEditDialog}
-        />
 
         <MerchantProfileMergeDialog
           merchants={merchants}
@@ -553,12 +521,10 @@ export default function MerchantMasterPage() {
         <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
           <DialogContent className="max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>
-                {editingMerchant ? 'Edit Merchant Profile' : 'Create Merchant Profile'}
-              </DialogTitle>
+              <DialogTitle>Create merchant profile</DialogTitle>
               <DialogDescription>
-                Updates canonical name, legacy UPI/account fields, and system category. Identifiers
-                are synced into merchant_identifiers on save.
+                Add a new canonical merchant. UPI/account fields sync into merchant_identifiers on
+                save.
               </DialogDescription>
             </DialogHeader>
 
@@ -651,21 +617,12 @@ export default function MerchantMasterPage() {
                   type="button"
                   variant="outline"
                   onClick={closeDialog}
-                  disabled={createMerchant.isPending || updateMerchant.isPending}
+                  disabled={createMerchant.isPending}
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={createMerchant.isPending || updateMerchant.isPending}
-                >
-                  {editingMerchant
-                    ? updateMerchant.isPending
-                      ? 'Saving...'
-                      : 'Save changes'
-                    : createMerchant.isPending
-                      ? 'Creating...'
-                      : 'Create merchant'}
+                <Button type="submit" disabled={createMerchant.isPending}>
+                  {createMerchant.isPending ? 'Creating…' : 'Create merchant'}
                 </Button>
               </DialogFooter>
             </form>

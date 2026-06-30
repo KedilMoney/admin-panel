@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   merchantProfilesApi,
   type AddMerchantAliasPayload,
@@ -17,6 +17,7 @@ export const useMerchantProfiles = (search?: string) => {
     staleTime: 30_000,
     gcTime: 300_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 };
 

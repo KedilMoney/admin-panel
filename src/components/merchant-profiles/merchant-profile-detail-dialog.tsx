@@ -42,6 +42,7 @@ interface MerchantProfileDetailDialogProps {
   merchant: MerchantProfile | null;
   systemCategories: SystemCategoryOption[];
   open: boolean;
+  variant?: 'dialog' | 'panel';
   onOpenChange: (open: boolean) => void;
   onEdit: (merchant: MerchantProfile) => void;
 }
@@ -72,6 +73,7 @@ export function MerchantProfileDetailDialog({
   merchant,
   systemCategories,
   open,
+  variant = 'dialog',
   onOpenChange,
   onEdit,
 }: MerchantProfileDetailDialogProps) {
@@ -247,88 +249,13 @@ export function MerchantProfileDetailDialog({
     return null;
   }
 
-  return (
-    <>
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{merchant.canonicalName}</DialogTitle>
-            <DialogDescription>
-              Merchant profile details — aliases, payment identifiers, and categorization metadata.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            <div className="grid gap-4 rounded-lg border border-[var(--border)] p-4 md:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                  System category
-                </p>
-                <p className="mt-1 font-medium">{merchant.systemCategory.name}</p>
-                <Badge variant="secondary" className="mt-2">
-                  {merchant.type}
-                </Badge>
-              </div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                Verification
-              </p>
-              <p className="mt-1 font-medium">
-                {formatVerificationLevel(merchant.verificationLevel)}
-              </p>
-              <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-                Confidence {merchant.confidence.toFixed(2)} · {merchant.seenCount} sightings
-              </p>
-            </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                  Linked transactions
-                </p>
-                <p className="mt-1 font-medium">{merchant._count.transactions}</p>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
-                  Last updated
-                </p>
-                <p className="mt-1 font-medium">{formatDateTime(merchant.updatedAt)}</p>
-              </div>
-            </div>
-
-            {(tags.length > 0 || categoryVotes.length > 0) && (
-              <div className="grid gap-4 md:grid-cols-2">
-                {tags.length > 0 ? (
-                  <div className="space-y-2 rounded-lg border border-[var(--border)] p-4">
-                    <h3 className="text-sm font-semibold">Taxonomy tags</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {tags.map((tag) => (
-                        <Badge key={tag.value} variant={tag.isPrimary ? 'default' : 'outline'}>
-                          {tag.value} ×{tag.count}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {categoryVotes.length > 0 ? (
-                  <div className="space-y-2 rounded-lg border border-[var(--border)] p-4">
-                    <h3 className="text-sm font-semibold">Category votes</h3>
-                    <div className="space-y-2">
-                      {categoryVotes.map((vote) => (
-                        <div key={vote.id} className="flex items-center justify-between text-sm">
-                          <span>{vote.systemCategory.name}</span>
-                          <Badge variant="secondary">{vote.points} pts</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Payment identifiers</h3>
-                <Badge variant="outline">{identifiers.length}</Badge>
-              </div>
+  const matchingPanel = (
+    <div className="space-y-6">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Payment identifiers</h3>
+          <Badge variant="outline">{identifiers.length}</Badge>
+        </div>
               {identifiers.length > 0 ? (
                 <Table>
                   <TableHeader>
@@ -522,24 +449,15 @@ export function MerchantProfileDetailDialog({
                 </div>
               </form>
 
-              {aliasError ? (
-                <p className="text-sm text-red-600 dark:text-red-400">{aliasError}</p>
-              ) : null}
-            </div>
+            {aliasError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{aliasError}</p>
+            ) : null}
           </div>
+    </div>
+  );
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-              Close
-            </Button>
-            <Button type="button" onClick={() => onEdit(merchant)}>
-              Edit profile
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(splitTarget)} onOpenChange={(next) => !next && closeSplitDialog()}>
+  const splitDialog = (
+    <Dialog open={Boolean(splitTarget)} onOpenChange={(next) => !next && closeSplitDialog()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Split to new profile</DialogTitle>
@@ -596,6 +514,109 @@ export function MerchantProfileDetailDialog({
           </form>
         </DialogContent>
       </Dialog>
+  );
+
+  if (variant === 'panel') {
+    return (
+      <>
+        {matchingPanel}
+        {splitDialog}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{merchant.canonicalName}</DialogTitle>
+            <DialogDescription>
+              Merchant profile details — aliases, payment identifiers, and categorization metadata.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <div className="grid gap-4 rounded-lg border border-[var(--border)] p-4 md:grid-cols-2">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                  System category
+                </p>
+                <p className="mt-1 font-medium">{merchant.systemCategory.name}</p>
+                <Badge variant="secondary" className="mt-2">
+                  {merchant.type}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                  Verification
+                </p>
+                <p className="mt-1 font-medium">
+                  {formatVerificationLevel(merchant.verificationLevel)}
+                </p>
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  Confidence {merchant.confidence.toFixed(2)} · {merchant.seenCount} sightings
+                </p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                  Linked transactions
+                </p>
+                <p className="mt-1 font-medium">{merchant._count.transactions}</p>
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">
+                  Last updated
+                </p>
+                <p className="mt-1 font-medium">{formatDateTime(merchant.updatedAt)}</p>
+              </div>
+            </div>
+
+            {(tags.length > 0 || categoryVotes.length > 0) && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {tags.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border border-[var(--border)] p-4">
+                    <h3 className="text-sm font-semibold">Taxonomy tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag) => (
+                        <Badge key={tag.value} variant={tag.isPrimary ? 'default' : 'outline'}>
+                          {tag.value} ×{tag.count}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {categoryVotes.length > 0 ? (
+                  <div className="space-y-2 rounded-lg border border-[var(--border)] p-4">
+                    <h3 className="text-sm font-semibold">Category votes</h3>
+                    <div className="space-y-2">
+                      {categoryVotes.map((vote) => (
+                        <div key={vote.id} className="flex items-center justify-between text-sm">
+                          <span>{vote.systemCategory.name}</span>
+                          <Badge variant="secondary">{vote.points} pts</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {matchingPanel}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              Close
+            </Button>
+            <Button type="button" onClick={() => onEdit(merchant)}>
+              Edit profile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {splitDialog}
     </>
   );
 }
