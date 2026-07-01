@@ -367,7 +367,7 @@ function TableWorkspace(props: {
   } as const;
 
   return (
-    <div className="mm-workspace">
+    <div className={`mm-workspace${drawerOpen ? ' mm-workspace--drawer-open' : ''}`}>
       <div className="mm-toolbar">
         <div className="mm-toolbar__count">{filtered.length} profiles</div>
         <div className="mm-spacer" />
