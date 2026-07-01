@@ -4,6 +4,7 @@ import {
   type AddMerchantAliasPayload,
   type AddMerchantIdentifierPayload,
   type MergeMerchantProfilesPayload,
+  type MerchantProfileBatchPayload,
   type MerchantProfilePayload,
   type SplitMerchantPayload,
 } from '@/lib/api/merchantProfiles';
@@ -41,6 +42,27 @@ export const useUpdateMerchantProfile = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
     },
+  });
+};
+
+export const useSaveMerchantProfileBatch = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: MerchantProfileBatchPayload }) =>
+      merchantProfilesApi.saveBatch(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+    },
+  });
+};
+
+export const useMerchantProfileDetail = (id: string | null, enabled: boolean) => {
+  return useQuery({
+    queryKey: [...merchantProfilesQueryKey, 'detail', id],
+    queryFn: () => merchantProfilesApi.getDetail(id!),
+    enabled: Boolean(id) && enabled,
+    staleTime: 60_000,
   });
 };
 
