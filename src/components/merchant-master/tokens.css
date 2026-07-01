@@ -1,0 +1,66 @@
+/* Kedil design tokens — the subset consumed by the Merchant Master screen.
+   Source of truth is the Kedil-Webapp design system (tokens/colors.css,
+   typography.css, effects.css). If that package is available in your codebase,
+   import it instead of this file. */
+:root {
+  /* Brand green */
+  --green-700: #16683c;
+  --green-600: #1a9a52; /* hover / pressed */
+  --green-500: #20b060; /* BRAND */
+  --green-text: #2c7a4b;
+  --green-100: #e6f5ec;
+
+  /* Navy / ink */
+  --navy-900: #1a1f3a;
+  --navy-700: #2a3055;
+
+  /* Neutrals (warm-cool slate) */
+  --ink-900: #3d4452;
+  --ink-700: #4b5563;
+  --ink-500: #5b6573;
+  --ink-400: #6b7280;
+  --ink-300: #9ca3af;
+  --line-200: #e8e8ee; /* card / chrome borders */
+  --line-100: #eef0f2; /* tracks, row dividers */
+
+  /* Surfaces */
+  --surface-canvas: #fafafb;
+  --surface-card: #ffffff;
+  --surface-subtle: #f1f2f5;
+
+  /* Semantic (muted) */
+  --warn-500: #d98a2b; --warn-text: #9a5e15; --warn-100: #fbf2e3;
+  --bad-500: #d1503f;  --bad-text: #b33d2e;  --bad-100: #fbeae7;
+  --info-500: #5b6bb0; --info-text: #41508f; --info-100: #eef0f8;
+  --purple-100: #f1ebf6; --purple-text: #6b4d8c;
+
+  --viz-purple: #9a7fbb;
+
+  /* Semantic aliases */
+  --text-strong: var(--navy-900);
+  --text-heading: var(--navy-700);
+  --text-body: var(--ink-700);
+  --text-title: var(--ink-500);
+  --text-secondary: var(--ink-400);
+  --text-muted: var(--ink-300);
+
+  /* Type */
+  --font-sans: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --fw-light: 300; --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700; --fw-heavy: 800;
+  --ls-tight: -0.02em; --ls-caps: 0.06em;
+
+  /* Radii */
+  --radius-input: 8px;
+  --radius-card: 12px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-card: 0 1px 1px rgba(10, 14, 30, 0.03);
+  --shadow-pop: 0 4px 12px rgba(10, 14, 30, 0.1);
+  --shadow-drawer: -8px 0 28px rgba(10, 14, 30, 0.14);
+
+  /* Motion */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-micro: 120ms;
+  --dur-drawer: 240ms;
+}

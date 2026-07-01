@@ -1,96 +1,34 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Nunito } from 'next/font/google';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AdminLayout } from '@/components/layout/admin-layout';
+import MerchantMaster, { type MerchantMasterVariant } from '@/components/merchant-master/MerchantMaster';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+  computeStats,
+  toBatchSavePayload,
+  toHandoffMerchant,
+} from '@/components/merchant-master/adapters';
+import { CreateMerchantDialog } from '@/components/merchant-master/create-merchant-dialog';
+import { MerchantProfileMergeDialog } from '@/components/merchant-master/merchant-profile-merge-dialog';
+import type { MerchantProfile as UiProfile } from '@/components/merchant-master/types';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  useCreateMerchantProfile,
+  useMerchantProfileDetail,
   useMerchantProfiles,
-  useRunMerchantMergeJob,
+  useSaveMerchantProfileBatch,
 } from '@/lib/hooks/useMerchantProfiles';
-import { useDebounce } from '@/lib/hooks/useDebounce';
-import {
-  formatIdentifierLabel,
-  formatVerificationLevel,
-  getIdentifierCount,
-  getPrimaryIdentifier,
-  getTopAliases,
-  getVerificationTone,
-  hasPaymentIdentifiers,
-  needsReview,
-  parseMerchantTags,
-  VERIFICATION_LEVELS,
-  type VerificationLevelFilter,
-} from '@/lib/merchant-profiles/utils';
-import { cn, formatDateTime } from '@/lib/utils';
-import type { MerchantProfile } from '@/types';
-import {
-  AlertCircle,
-  ChevronDown,
-  GitMerge,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Search,
-} from 'lucide-react';
-import { MerchantProfileMergeDialog } from '@/components/merchant-profiles/merchant-profile-merge-dialog';
-import { MerchantProfileWorkspace } from '@/components/merchant-profiles/merchant-profile-workspace';
-import { DuplicateMerchantsCard } from '@/components/merchant-profiles/duplicate-merchants-card';
-import {
-  findKeywordDuplicateGroups,
-} from '@/lib/merchant-profiles/duplicateGroups';
+import type { MerchantProfile as ApiProfile } from '@/types';
+import '@/components/merchant-master/tokens.css';
+import '@/components/merchant-master/merchant-master.css';
 
-type MerchantProfileFormState = {
-  canonicalName: string;
-  systemCategoryId: string;
-  upiId: string;
-  accountNumber: string;
-  confidence: string;
-};
-
-const INITIAL_FORM: MerchantProfileFormState = {
-  canonicalName: '',
-  systemCategoryId: '',
-  upiId: '',
-  accountNumber: '',
-  confidence: '0.95',
-};
-
-const trustRowClass: Record<ReturnType<typeof getVerificationTone>, string> = {
-  trusted: 'border-l-green-500',
-  high: 'border-l-blue-500',
-  medium: 'border-l-amber-500',
-  low: 'border-l-red-500',
-};
-
-const buildPayload = (form: MerchantProfileFormState) => ({
-  canonicalName: form.canonicalName.trim(),
-  systemCategoryId: form.systemCategoryId,
-  upiId: form.upiId.trim() || null,
-  accountNumber: form.accountNumber.trim() || null,
-  confidence: Number(form.confidence),
+const nunito = Nunito({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700', '800'],
 });
+
+const LAYOUT_KEY = 'merchant-master-layout';
 
 const formatSubmitError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
@@ -105,171 +43,149 @@ const formatSubmitError = (error: unknown) => {
 };
 
 export default function MerchantMasterPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [verificationFilter, setVerificationFilter] = useState<VerificationLevelFilter>('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [reviewOnly, setReviewOnly] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [layout, setLayout] = useState<MerchantMasterVariant>('table-drawer');
+  const [merchants, setMerchants] = useState<UiProfile[]>([]);
+  const originalsRef = useRef<Map<string, UiProfile>>(new Map());
+  const removedIdentifiersRef = useRef<Map<string, Set<string>>>(new Map());
+  const removedAliasesRef = useRef<Map<string, Set<string>>>(new Map());
+  const [signalsMerchantId, setSignalsMerchantId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [mergeSurvivorId, setMergeSurvivorId] = useState<string | null>(null);
   const [mergeDuplicateIds, setMergeDuplicateIds] = useState<string[]>([]);
-  const [showDuplicatePanel, setShowDuplicatePanel] = useState(false);
-  const duplicatePanelRef = useRef<HTMLDivElement>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [form, setForm] = useState<MerchantProfileFormState>(INITIAL_FORM);
-  const [formError, setFormError] = useState('');
-  const [mergeMessage, setMergeMessage] = useState('');
 
-  const debouncedSearch = useDebounce(searchQuery, 400);
-  const { data, isLoading, error, refetch, isFetching } = useMerchantProfiles(
-    debouncedSearch.trim() || undefined
-  );
-  const { data: allMerchantsData } = useMerchantProfiles(undefined);
-  const createMerchant = useCreateMerchantProfile();
-  const runMergeJob = useRunMerchantMergeJob();
-
-  const merchants = useMemo(() => data?.merchants ?? [], [data]);
-  const allMerchants = useMemo(() => allMerchantsData?.merchants ?? merchants, [allMerchantsData, merchants]);
-  const systemCategories = useMemo(() => data?.systemCategories ?? [], [data]);
-
-  const filteredMerchants = useMemo(() => {
-    return merchants.filter((merchant) => {
-      if (reviewOnly && !needsReview(merchant.verificationLevel)) return false;
-      if (verificationFilter !== 'all' && merchant.verificationLevel !== verificationFilter) {
-        return false;
-      }
-      if (categoryFilter !== 'all' && merchant.systemCategoryId !== categoryFilter) {
-        return false;
-      }
-      return true;
-    });
-  }, [merchants, reviewOnly, verificationFilter, categoryFilter]);
-
-  const selectedMerchant = useMemo(() => {
-    if (!selectedId) return null;
-    return merchants.find((merchant) => merchant.id === selectedId) ?? null;
-  }, [merchants, selectedId]);
-
-  const verificationFilterLabel =
-    verificationFilter === 'all'
-      ? 'All trust levels'
-      : formatVerificationLevel(verificationFilter);
-
-  const categoryFilterLabel =
-    categoryFilter === 'all'
-      ? 'All categories'
-      : (systemCategories.find((category) => category.id === categoryFilter)?.name ?? 'Category');
-
-  const duplicateGroups = useMemo(
-    () => findKeywordDuplicateGroups(allMerchants),
-    [allMerchants]
-  );
-
-  const summary = useMemo(
-    () => ({
-      total: allMerchants.length,
-      needsReview: allMerchants.filter((merchant) => needsReview(merchant.verificationLevel)).length,
-      confirmed: allMerchants.filter((merchant) =>
-        ['user_confirmed', 'multi_user_confirmed'].includes(merchant.verificationLevel)
-      ).length,
-      withIdentifiers: allMerchants.filter(hasPaymentIdentifiers).length,
-      duplicateGroups: duplicateGroups.length,
-    }),
-    [allMerchants, duplicateGroups]
-  );
-
-  const openMergeDialog = (survivorId: string | null = null, duplicateIds: string[] = []) => {
-    setMergeSurvivorId(survivorId);
-    setMergeDuplicateIds(duplicateIds);
-    setIsMergeOpen(true);
-  };
-
-  const toggleDuplicatePanel = () => {
-    if (summary.duplicateGroups === 0) return;
-    setShowDuplicatePanel((current) => !current);
-  };
+  const { data, isLoading, error, refetch } = useMerchantProfiles();
+  const saveBatch = useSaveMerchantProfileBatch();
+  const {
+    data: detailData,
+    isLoading: isDetailLoading,
+    error: detailError,
+    refetch: refetchDetail,
+  } = useMerchantProfileDetail(signalsMerchantId, Boolean(signalsMerchantId));
 
   useEffect(() => {
-    if (!showDuplicatePanel) return;
-    duplicatePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [showDuplicatePanel]);
+    const stored = window.localStorage.getItem(LAYOUT_KEY);
+    if (stored === 'table-drawer' || stored === 'split') {
+      setLayout(stored);
+    }
+  }, []);
 
-  const openCreateDialog = () => {
-    setForm(INITIAL_FORM);
-    setFormError('');
-    setIsDialogOpen(true);
-  };
+  useEffect(() => {
+    if (!data?.merchants) return;
+    const adapted = data.merchants.map(toHandoffMerchant);
+    setMerchants(adapted);
+    const nextOriginals = new Map<string, UiProfile>();
+    for (const merchant of adapted) {
+      nextOriginals.set(merchant.id, structuredClone(merchant));
+    }
+    originalsRef.current = nextOriginals;
+    removedIdentifiersRef.current = new Map();
+    removedAliasesRef.current = new Map();
+  }, [data?.merchants]);
 
-  const selectedCategory = useMemo(
-    () => systemCategories.find((category) => category.id === form.systemCategoryId),
-    [form.systemCategoryId, systemCategories]
+  useEffect(() => {
+    if (!detailData?.userMappings || !signalsMerchantId) return;
+    setMerchants((current) =>
+      current.map((merchant) =>
+        merchant.id === signalsMerchantId
+          ? {
+              ...merchant,
+              userMappings: detailData.userMappings.map((mapping) => ({
+                merchantKey: mapping.merchantKey,
+                systemCategoryId: '',
+                category: mapping.category,
+                userCorrected: mapping.userCorrected,
+                confirmed: mapping.confirmed,
+                firstSeen: mapping.firstSeen,
+                lastSeen: mapping.lastSeen,
+              })),
+            }
+          : merchant
+      )
+    );
+  }, [detailData, signalsMerchantId]);
+
+  const stats = useMemo(
+    () => computeStats(data?.merchants ?? []),
+    [data?.merchants]
   );
 
-  const selectedCategoryLabel = selectedCategory
-    ? `${selectedCategory.name} (${selectedCategory.type})`
-    : undefined;
+  const systemCategories = data?.systemCategories ?? [];
+  const apiMerchants = data?.merchants ?? [];
 
-  const handleRunMergeJob = async () => {
-    setMergeMessage('');
+  const handleVariantChange = (next: MerchantMasterVariant) => {
+    setLayout(next);
+    window.localStorage.setItem(LAYOUT_KEY, next);
+  };
+
+  const trackRemoveIdentifier = useCallback((merchantId: string, identifierId: string) => {
+    const original = originalsRef.current.get(merchantId);
+    if (!original?.identifiers.some((item) => item.id === identifierId)) return;
+    const bucket = removedIdentifiersRef.current.get(merchantId) ?? new Set<string>();
+    bucket.add(identifierId);
+    removedIdentifiersRef.current.set(merchantId, bucket);
+  }, []);
+
+  const trackRemoveAlias = useCallback((merchantId: string, aliasId: string) => {
+    const original = originalsRef.current.get(merchantId);
+    if (!original?.aliases.some((item) => item.id === aliasId)) return;
+    const bucket = removedAliasesRef.current.get(merchantId) ?? new Set<string>();
+    bucket.add(aliasId);
+    removedAliasesRef.current.set(merchantId, bucket);
+  }, []);
+
+  const handleSaveProfile = async (merchant: UiProfile) => {
+    setSaveError('');
+    const original = originalsRef.current.get(merchant.id);
+    if (!original) {
+      setSaveError('Original profile state is missing.');
+      throw new Error('Original profile state is missing.');
+    }
+
+    const payload = toBatchSavePayload({
+      merchant,
+      original,
+      removedIdentifierIds: [...(removedIdentifiersRef.current.get(merchant.id) ?? [])],
+      removedAliasIds: [...(removedAliasesRef.current.get(merchant.id) ?? [])],
+    });
+
     try {
-      const result = await runMergeJob.mutateAsync();
-      setMergeMessage(
-        `Merge job finished: ${result.mergedGroups} group(s) merged, ${result.deletedProfiles} duplicate profile(s) removed.`
+      const saved = await saveBatch.mutateAsync({ id: merchant.id, payload });
+      const adapted = toHandoffMerchant(saved);
+      setMerchants((current) =>
+        current.map((item) =>
+          item.id === adapted.id
+            ? {
+                ...adapted,
+                userMappings: item.userMappings,
+              }
+            : item
+        )
       );
-    } catch (mergeError: unknown) {
-      setMergeMessage(formatSubmitError(mergeError));
+      originalsRef.current.set(adapted.id, structuredClone(adapted));
+      removedIdentifiersRef.current.delete(adapted.id);
+      removedAliasesRef.current.delete(adapted.id);
+    } catch (saveFailure) {
+      const message = formatSubmitError(saveFailure);
+      setSaveError(message);
+      throw saveFailure;
     }
   };
 
-  const closeDialog = () => {
-    setIsDialogOpen(false);
-    setForm(INITIAL_FORM);
-    setFormError('');
-  };
-
-  const handleDialogChange = (open: boolean) => {
-    if (open) {
-      setIsDialogOpen(true);
-      return;
-    }
-    closeDialog();
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setFormError('');
-
-    if (!form.canonicalName.trim()) {
-      setFormError('Merchant name is required.');
-      return;
-    }
-    if (!form.systemCategoryId) {
-      setFormError('Please choose a system category.');
-      return;
-    }
-
-    const confidence = Number(form.confidence);
-    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
-      setFormError('Confidence must be between 0 and 1.');
-      return;
-    }
-
-    try {
-      await createMerchant.mutateAsync(buildPayload(form));
-      closeDialog();
-    } catch (submitError: unknown) {
-      setFormError(formatSubmitError(submitError));
-    }
+  const openMergeDialog = (merchant?: UiProfile) => {
+    setMergeSurvivorId(merchant?.id ?? null);
+    setMergeDuplicateIds([]);
+    setIsMergeOpen(true);
   };
 
   if (isLoading) {
     return (
       <AuthGuard>
         <AdminLayout>
-          <div className="flex h-64 items-center justify-center">
-            <div className="text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" />
-              <p className="mt-4 text-[var(--muted-foreground)]">Loading merchant profiles...</p>
+          <div className={`mm ${nunito.className}`}>
+            <div className="mm-page">
+              <p className="mm-subtitle">Loading merchant profiles…</p>
             </div>
           </div>
         </AdminLayout>
@@ -281,17 +197,14 @@ export default function MerchantMasterPage() {
     return (
       <AuthGuard>
         <AdminLayout>
-          <Card>
-            <CardHeader>
-              <CardTitle>Merchant Profiles</CardTitle>
-              <CardDescription>Unable to load merchant data right now.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => refetch()} size="sm">
+          <div className={`mm ${nunito.className}`}>
+            <div className="mm-page">
+              <p className="mm-subtitle">Unable to load merchant profiles.</p>
+              <button type="button" className="mm-btn mm-btn--secondary" onClick={() => refetch()}>
                 Retry
-              </Button>
-            </CardContent>
-          </Card>
+              </button>
+            </div>
+          </div>
         </AdminLayout>
       </AuthGuard>
     );
@@ -300,308 +213,37 @@ export default function MerchantMasterPage() {
   return (
     <AuthGuard>
       <AdminLayout>
-        <div className="space-y-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-[var(--foreground)]">Merchant Profiles</h1>
-              <p className="mt-2 max-w-2xl text-[var(--muted-foreground)]">
-                Inspect auto-categorization data from production tables: canonical names,
-                merchant_identifiers, aliases, taxonomy tags, and category votes.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={() => openMergeDialog()}
-                variant="outline"
-                size="sm"
-              >
-                <GitMerge className="mr-2 h-4 w-4" />
-                Merge profiles
-              </Button>
-              <Button
-                onClick={handleRunMergeJob}
-                variant="outline"
-                size="sm"
-                disabled={runMergeJob.isPending}
-              >
-                <GitMerge className={`mr-2 h-4 w-4 ${runMergeJob.isPending ? 'animate-pulse' : ''}`} />
-                {runMergeJob.isPending ? 'Running merge…' : 'Run merge job'}
-              </Button>
-              <Button onClick={() => refetch()} variant="outline" size="sm">
-                <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
-              <Button onClick={openCreateDialog} size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add merchant
-              </Button>
-            </div>
-          </div>
-
-          {mergeMessage ? (
-            <div className="rounded-md border border-[var(--border)] bg-[var(--accent)] px-4 py-3 text-sm">
-              {mergeMessage}
-            </div>
-          ) : null}
-
-          <div className="relative max-w-2xl">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search name, alias, or UPI ID (e.g. Vanak)…"
-              className="pl-10"
-            />
-            {searchQuery !== debouncedSearch ? (
-              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-[var(--muted-foreground)]" />
-            ) : null}
-          </div>
-          <p className="-mt-3 max-w-2xl text-xs text-[var(--muted-foreground)]">
-            Filter the browse list by name, alias, UPI ID, or category.
-          </p>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Total profiles</CardDescription>
-                <CardTitle className="text-2xl">{summary.total}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Needs review (LLM low/medium)</CardDescription>
-                <CardTitle className="text-2xl text-amber-700 dark:text-amber-300">
-                  {summary.needsReview}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>User confirmed</CardDescription>
-                <CardTitle className="text-2xl">{summary.confirmed}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>With payment identifiers</CardDescription>
-                <CardTitle className="text-2xl">{summary.withIdentifiers}</CardTitle>
-              </CardHeader>
-            </Card>
-            <button
-              type="button"
-              onClick={toggleDuplicatePanel}
-              disabled={summary.duplicateGroups === 0}
-              className={cn(
-                'rounded-xl border border-[var(--border)] bg-[var(--card)] text-left transition-colors',
-                summary.duplicateGroups > 0 &&
-                  'cursor-pointer hover:border-violet-500/40 hover:bg-violet-500/5',
-                showDuplicatePanel && 'border-violet-500/50 bg-violet-500/10 ring-2 ring-violet-500/20',
-                summary.duplicateGroups === 0 && 'cursor-default opacity-70'
-              )}
-            >
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center justify-between gap-2">
-                  <span>Duplicate keyword groups</span>
-                  {summary.duplicateGroups > 0 ? (
-                    <ChevronDown
-                      className={cn(
-                        'h-4 w-4 text-violet-600 transition-transform dark:text-violet-400',
-                        showDuplicatePanel && 'rotate-180'
-                      )}
-                    />
-                  ) : null}
-                </CardDescription>
-                <CardTitle className="text-2xl text-violet-700 dark:text-violet-300">
-                  {summary.duplicateGroups}
-                </CardTitle>
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  {summary.duplicateGroups > 0
-                    ? showDuplicatePanel
-                      ? 'Click a group below to see merchants'
-                      : 'Click to view groups (Vanak, Apollo, …)'
-                    : 'No keyword groups found'}
-                </p>
-              </CardHeader>
-            </button>
-          </div>
-
-          {showDuplicatePanel ? (
-            <div ref={duplicatePanelRef}>
-              <DuplicateMerchantsCard
-                groups={duplicateGroups}
-                expanded
-                onClose={() => setShowDuplicatePanel(false)}
-                onSelectMerchant={setSelectedId}
-                onMergeGroup={(survivorId, duplicateIds) => openMergeDialog(survivorId, duplicateIds)}
-              />
-            </div>
-          ) : null}
-
-          <div
-            className={cn(
-              'grid gap-4',
-              selectedId ? 'xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : 'xl:grid-cols-1'
-            )}
-          >
-            <Card className="overflow-hidden">
-              <CardHeader className="relative z-20 space-y-4 border-b border-[var(--border)] bg-[var(--background)] pb-4">
-                <div>
-                  <CardTitle className="text-lg">Browse profiles</CardTitle>
-                  <CardDescription>
-                    {filteredMerchants.length} shown
-                    {searchQuery !== debouncedSearch ? ' · searching…' : ''}
-                    {isFetching && searchQuery === debouncedSearch ? ' · updating…' : ''}
-                  </CardDescription>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--muted-foreground)]">Trust level</Label>
-                    <Select
-                      value={verificationFilter}
-                      onValueChange={(value) =>
-                        setVerificationFilter(value as VerificationLevelFilter)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue>{verificationFilterLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All trust levels</SelectItem>
-                        {VERIFICATION_LEVELS.map((level) => (
-                          <SelectItem key={level} value={level}>
-                            {formatVerificationLevel(level)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--muted-foreground)]">Category</Label>
-                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                      <SelectTrigger>
-                        <SelectValue>{categoryFilterLabel}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All categories</SelectItem>
-                        {systemCategories.map((category) => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-[var(--muted-foreground)]">Quick filter</Label>
-                    <Button
-                      type="button"
-                      variant={reviewOnly ? 'default' : 'outline'}
-                      onClick={() => setReviewOnly((current) => !current)}
-                      className="w-full justify-start"
-                    >
-                      <AlertCircle className="mr-2 h-4 w-4" />
-                      Review queue only
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="max-h-[68vh] overflow-y-auto p-0">
-                {filteredMerchants.length > 0 ? (
-                  <div className="divide-y divide-[var(--border)]">
-                    {filteredMerchants.map((merchant) => {
-                      const primaryIdentifier = getPrimaryIdentifier(merchant);
-                      const topAliases = getTopAliases(merchant, 2);
-                      const tags = parseMerchantTags(merchant.tags);
-                      const primaryTag = tags.find((tag) => tag.isPrimary) ?? tags[0];
-                      const tone = getVerificationTone(merchant.verificationLevel);
-                      const isSelected = merchant.id === selectedId;
-
-                      return (
-                        <button
-                          key={merchant.id}
-                          type="button"
-                          onClick={() => setSelectedId(merchant.id)}
-                          className={cn(
-                            'w-full border-l-4 px-4 py-3 text-left transition-colors hover:bg-[var(--accent)]/50',
-                            trustRowClass[tone],
-                            isSelected && 'bg-[var(--accent)]'
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 space-y-1">
-                              <p className="truncate font-semibold">{merchant.canonicalName}</p>
-                              <p className="truncate text-xs text-[var(--muted-foreground)]">
-                                {merchant.systemCategory.name}
-                              </p>
-                            </div>
-                            <Badge variant="outline" className="shrink-0 text-[10px]">
-                              {merchant.confidence.toFixed(2)}
-                            </Badge>
-                          </div>
-
-                          <div className="mt-2 space-y-2">
-                            {primaryIdentifier ? (
-                              <p className="truncate font-mono text-xs text-[var(--foreground)]">
-                                {formatIdentifierLabel(primaryIdentifier)}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-[var(--muted-foreground)]">No payment ID</p>
-                            )}
-
-                            <div className="flex flex-wrap gap-1.5">
-                              <Badge variant="secondary" className="text-[10px]">
-                                {formatVerificationLevel(merchant.verificationLevel)}
-                              </Badge>
-                              {primaryTag ? (
-                                <Badge variant="outline" className="max-w-[140px] truncate text-[10px]">
-                                  {primaryTag.value}
-                                </Badge>
-                              ) : null}
-                              {topAliases.map((alias) => (
-                                <Badge
-                                  key={alias.id}
-                                  variant="outline"
-                                  className="max-w-[120px] truncate text-[10px]"
-                                >
-                                  {alias.rawName}
-                                </Badge>
-                              ))}
-                            </div>
-
-                            <p className="text-[11px] text-[var(--muted-foreground)]">
-                              {merchant._count.aliases} aliases · {getIdentifierCount(merchant)} IDs ·{' '}
-                              {merchant._count.transactions} txns · {formatDateTime(merchant.updatedAt)}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="px-4 py-16 text-center text-sm text-[var(--muted-foreground)]">
-                    No merchant profiles match your filters.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {selectedId && selectedMerchant ? (
-              <MerchantProfileWorkspace
-                merchant={selectedMerchant}
-                systemCategories={systemCategories}
-                onClose={() => setSelectedId(null)}
-                onMerge={(merchant) => openMergeDialog(merchant.id)}
-              />
-            ) : null}
-          </div>
+        <div className={`mm ${nunito.className}`}>
+          <MerchantMaster
+            variant={layout}
+            onVariantChange={handleVariantChange}
+            merchants={merchants}
+            setMerchants={setMerchants}
+            stats={stats}
+            systemCategories={systemCategories}
+            onSaveProfile={handleSaveProfile}
+            onAddMerchant={() => setIsCreateOpen(true)}
+            onMerge={(merchant) => openMergeDialog(merchant)}
+            onSignalsTabOpen={setSignalsMerchantId}
+            signalsLoadingId={isDetailLoading ? signalsMerchantId : null}
+            signalsError={
+              detailError ? formatSubmitError(detailError) : null
+            }
+            onSignalsRetry={() => refetchDetail()}
+            onTrackRemoveIdentifier={trackRemoveIdentifier}
+            onTrackRemoveAlias={trackRemoveAlias}
+            saveError={saveError}
+          />
         </div>
 
+        <CreateMerchantDialog
+          open={isCreateOpen}
+          onOpenChange={setIsCreateOpen}
+          systemCategories={systemCategories}
+        />
+
         <MerchantProfileMergeDialog
-          merchants={merchants}
+          merchants={apiMerchants}
           systemCategories={systemCategories}
           open={isMergeOpen}
           onOpenChange={(open) => {
@@ -614,117 +256,6 @@ export default function MerchantMasterPage() {
           initialSurvivorId={mergeSurvivorId}
           initialDuplicateIds={mergeDuplicateIds}
         />
-
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
-          <DialogContent className="max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Create merchant profile</DialogTitle>
-              <DialogDescription>
-                Add a new canonical merchant. UPI/account fields sync into merchant_identifiers on
-                save.
-              </DialogDescription>
-            </DialogHeader>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="merchant-name">Canonical name</Label>
-                <Input
-                  id="merchant-name"
-                  value={form.canonicalName}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, canonicalName: event.target.value }))
-                  }
-                  placeholder="e.g. Vanakkam Cafe"
-                  required
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="merchant-upi">UPI ID (syncs to identifiers)</Label>
-                  <Input
-                    id="merchant-upi"
-                    value={form.upiId}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, upiId: event.target.value }))
-                    }
-                    placeholder="shop@okhdfcbank"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="merchant-account">Account number</Label>
-                  <Input
-                    id="merchant-account"
-                    value={form.accountNumber}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, accountNumber: event.target.value }))
-                    }
-                    placeholder="Optional bank account reference"
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>System category</Label>
-                  <Select
-                    value={form.systemCategoryId}
-                    onValueChange={(value) =>
-                      setForm((current) => ({ ...current, systemCategoryId: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a category">
-                        {selectedCategoryLabel}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {systemCategories.map((category) => (
-                        <SelectItem key={category.id} value={category.id}>
-                          {category.name} ({category.type})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="merchant-confidence">Confidence</Label>
-                  <Input
-                    id="merchant-confidence"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={form.confidence}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, confidence: event.target.value }))
-                    }
-                  />
-                </div>
-              </div>
-
-              {formError ? (
-                <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-                  {formError}
-                </div>
-              ) : null}
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={closeDialog}
-                  disabled={createMerchant.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createMerchant.isPending}>
-                  {createMerchant.isPending ? 'Creating…' : 'Create merchant'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </AdminLayout>
     </AuthGuard>
   );

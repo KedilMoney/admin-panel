@@ -18,6 +18,29 @@ export interface MerchantProfilePayload {
   confidence?: number;
 }
 
+export interface MerchantProfileBatchPayload extends MerchantProfilePayload {
+  verificationLevel: string;
+  type: string;
+  tags: string[];
+  identifiers: { id?: string; type: 'UPI' | 'NEFT' | 'ACCOUNT'; value: string }[];
+  aliases: { id?: string; rawName: string; bankSource?: string | null }[];
+  removedIdentifierIds: string[];
+  removedAliasIds: string[];
+}
+
+export interface UserMerchantMappingDto {
+  merchantKey: string;
+  category: string;
+  userCorrected: boolean;
+  confirmed: boolean;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface MerchantProfileDetailResponse {
+  userMappings: UserMerchantMappingDto[];
+}
+
 export interface AddMerchantAliasPayload {
   rawName: string;
   bankSource?: string | null;
@@ -80,6 +103,18 @@ export const merchantProfilesApi = {
 
   update: async (id: string, payload: MerchantProfilePayload): Promise<MerchantProfile> => {
     const response = await api.put<MerchantProfile>(`/api/admin/merchant-profiles/${id}`, payload);
+    return response.data.data;
+  },
+
+  saveBatch: async (id: string, payload: MerchantProfileBatchPayload): Promise<MerchantProfile> => {
+    const response = await api.put<MerchantProfile>(`/api/admin/merchant-profiles/${id}`, payload);
+    return response.data.data;
+  },
+
+  getDetail: async (id: string): Promise<MerchantProfileDetailResponse> => {
+    const response = await api.get<MerchantProfileDetailResponse>(
+      `/api/admin/merchant-profiles/${id}/detail`
+    );
     return response.data.data;
   },
 
