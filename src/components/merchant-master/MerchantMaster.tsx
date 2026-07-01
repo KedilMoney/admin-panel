@@ -80,7 +80,12 @@ export default function MerchantMaster({
     variant === 'split' ? (merchants[0]?.id ?? null) : null
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [statsHover, setStatsHover] = useState(true);
   const [toast, setToast] = useState('');
+
+  const merchantActive =
+    variant === 'table-drawer' ? drawerOpen : Boolean(selectedId);
+  const showStats = !merchantActive && statsHover;
 
   const editorFor = useMerchantEditor(
     setMerchants,
@@ -132,12 +137,12 @@ export default function MerchantMaster({
     (flash as typeof flash & { _t?: number })._t = window.setTimeout(() => setToast(''), 1900);
   }, []);
 
-  const save = async (merchant: MerchantProfile | null, closeDrawer = false) => {
+  const save = async (merchant: MerchantProfile | null, closeDrawerOnSave = false) => {
     if (!merchant) return;
     try {
       await onSaveProfile(merchant);
       flash('Profile saved');
-      if (closeDrawer) setDrawerOpen(false);
+      if (closeDrawerOnSave) closeDrawer();
     } catch {
       // Parent surfaces saveError
     }
@@ -146,6 +151,17 @@ export default function MerchantMaster({
   const openRow = (id: string) => {
     setSelectedId(id);
     setDrawerOpen(true);
+    setStatsHover(false);
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setStatsHover(true);
+  };
+
+  const handleSplitSelect = (id: string) => {
+    setSelectedId(id);
+    setStatsHover(false);
   };
 
   const signalsProps = selected
@@ -201,26 +217,40 @@ export default function MerchantMaster({
           </div>
         </div>
 
-        <div className="mm-stats">
-          <div className="mm-stat">
-            <div className="mm-stat__label">Total profiles</div>
-            <div className="mm-stat__value">{stats.totalProfiles}</div>
-          </div>
-          <div className="mm-stat">
-            <div className="mm-stat__label">Needs review</div>
-            <div className="mm-stat__value mm-stat__value--accent">{stats.needsReview}</div>
-          </div>
-          <div className="mm-stat">
-            <div className="mm-stat__label">User confirmed</div>
-            <div className="mm-stat__value">{stats.userConfirmed}</div>
-          </div>
-          <div className="mm-stat">
-            <div className="mm-stat__label">With identifiers</div>
-            <div className="mm-stat__value">{stats.withIdentifiers}</div>
-          </div>
-          <div className="mm-stat">
-            <div className="mm-stat__label">Duplicate groups</div>
-            <div className="mm-stat__value mm-stat__value--brand">{stats.duplicateGroups}</div>
+        {!showStats && !merchantActive ? (
+          <div
+            className="mm-stats-reveal"
+            onMouseEnter={() => setStatsHover(true)}
+            aria-hidden
+          />
+        ) : null}
+
+        <div
+          className={`mm-stats-wrap${showStats ? '' : ' is-collapsed'}`}
+          onMouseEnter={() => setStatsHover(true)}
+          onMouseLeave={() => setStatsHover(false)}
+        >
+          <div className="mm-stats">
+            <div className="mm-stat">
+              <div className="mm-stat__label">Total profiles</div>
+              <div className="mm-stat__value">{stats.totalProfiles}</div>
+            </div>
+            <div className="mm-stat">
+              <div className="mm-stat__label">Needs review</div>
+              <div className="mm-stat__value mm-stat__value--accent">{stats.needsReview}</div>
+            </div>
+            <div className="mm-stat">
+              <div className="mm-stat__label">User confirmed</div>
+              <div className="mm-stat__value">{stats.userConfirmed}</div>
+            </div>
+            <div className="mm-stat">
+              <div className="mm-stat__label">With identifiers</div>
+              <div className="mm-stat__value">{stats.withIdentifiers}</div>
+            </div>
+            <div className="mm-stat">
+              <div className="mm-stat__label">Duplicate groups</div>
+              <div className="mm-stat__value mm-stat__value--brand">{stats.duplicateGroups}</div>
+            </div>
           </div>
         </div>
 
@@ -237,13 +267,14 @@ export default function MerchantMaster({
             openRow={openRow}
             selectedId={selectedId}
             drawerOpen={drawerOpen}
+            statsCollapsed={!showStats}
             drawer={
               drawerOpen && selected ? (
                 <MerchantDrawer
                   merchant={selected}
                   editor={editorFor(selected.id)}
                   systemCategories={systemCategories}
-                  onClose={() => setDrawerOpen(false)}
+                  onClose={closeDrawer}
                   onSave={() => save(selected, true)}
                   onMerge={onMerge ? () => onMerge(selected) : undefined}
                   saveError={saveError}
@@ -258,7 +289,8 @@ export default function MerchantMaster({
             trust={trust}
             setTrust={setTrust}
             selectedId={selectedId}
-            setSelectedId={setSelectedId}
+            setSelectedId={handleSplitSelect}
+            statsCollapsed={!showStats}
             profile={
               selected ? (
                 <MerchantProfilePanel
@@ -311,6 +343,7 @@ function TableWorkspace(props: {
   openRow: (id: string) => void;
   selectedId: string | null;
   drawerOpen: boolean;
+  statsCollapsed: boolean;
   drawer: React.ReactNode;
 }) {
   const {
@@ -325,6 +358,7 @@ function TableWorkspace(props: {
     openRow,
     selectedId,
     drawerOpen,
+    statsCollapsed,
     drawer,
   } = props;
   const cols = {
@@ -371,7 +405,7 @@ function TableWorkspace(props: {
         </div>
       </div>
 
-      <div className="mm-table__scroll">
+      <div className={`mm-table__scroll${statsCollapsed ? ' is-expanded' : ''}`}>
         <div className="mm-row mm-thead" style={cols}>
           <div className="mm-th">Merchant</div>
           <div className="mm-th">Category</div>
@@ -477,11 +511,12 @@ function SplitWorkspace(props: {
   setTrust: (v: string) => void;
   selectedId: string | null;
   setSelectedId: (id: string) => void;
+  statsCollapsed: boolean;
   profile: React.ReactNode;
 }) {
-  const { filtered, trust, setTrust, selectedId, setSelectedId, profile } = props;
+  const { filtered, trust, setTrust, selectedId, setSelectedId, statsCollapsed, profile } = props;
   return (
-    <div className="mm-split">
+    <div className={`mm-split${statsCollapsed ? ' mm-split--stats-collapsed' : ''}`}>
       <div className="mm-list">
         <div className="mm-list__head">
           <span className="mm-toolbar__count" style={{ fontSize: 14 }}>
