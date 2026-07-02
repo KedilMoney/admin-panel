@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { GitMerge, Plus, Search } from 'lucide-react';
 import type { SystemCategoryOption } from '@/types';
 import { MerchantDrawer, MerchantProfilePanel } from './MerchantDetail';
 import {
@@ -28,6 +28,7 @@ export interface MerchantMasterProps {
   onSaveProfile: (merchant: MerchantProfile) => Promise<void>;
   onAddMerchant: () => void;
   onMerge?: (merchant: MerchantProfile) => void;
+  onBulkMerge?: (merchantIds: string[]) => void;
   onSignalsTabOpen?: (merchantId: string) => void;
   signalsLoadingId?: string | null;
   signalsError?: string | null;
@@ -64,6 +65,7 @@ export default function MerchantMaster({
   onSaveProfile,
   onAddMerchant,
   onMerge,
+  onBulkMerge,
   onSignalsTabOpen,
   signalsLoadingId = null,
   signalsError = null,
@@ -79,9 +81,11 @@ export default function MerchantMaster({
   const [selectedId, setSelectedId] = useState<string | null>(
     variant === 'split' ? (merchants[0]?.id ?? null) : null
   );
+  const [bulkMergeIds, setBulkMergeIds] = useState<string[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [statsHover, setStatsHover] = useState(true);
   const [toast, setToast] = useState('');
+  const toastTimeoutRef = useRef<number | null>(null);
 
   const merchantActive =
     variant === 'table-drawer' ? drawerOpen : Boolean(selectedId);
@@ -131,10 +135,16 @@ export default function MerchantMaster({
 
   const selected = merchants.find((m) => m.id === selectedId) ?? null;
 
+  const filteredIds = useMemo(() => new Set(filtered.map((merchant) => merchant.id)), [filtered]);
+  const visibleBulkMergeIds = bulkMergeIds.filter((id) => filteredIds.has(id));
+  const allVisibleSelected = filtered.length > 0 && visibleBulkMergeIds.length === filtered.length;
+
   const flash = useCallback((msg: string) => {
     setToast(msg);
-    window.clearTimeout((flash as typeof flash & { _t?: number })._t);
-    (flash as typeof flash & { _t?: number })._t = window.setTimeout(() => setToast(''), 1900);
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = window.setTimeout(() => setToast(''), 1900);
   }, []);
 
   const save = async (merchant: MerchantProfile | null, closeDrawerOnSave = false) => {
@@ -157,6 +167,29 @@ export default function MerchantMaster({
   const closeDrawer = () => {
     setDrawerOpen(false);
     setStatsHover(true);
+  };
+
+  const toggleBulkMergeId = (id: string) => {
+    setBulkMergeIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  };
+
+  const toggleAllVisibleBulkMergeIds = () => {
+    setBulkMergeIds((current) => {
+      const visible = filtered.map((merchant) => merchant.id);
+      if (visible.length === 0) return current;
+      if (visible.every((id) => current.includes(id))) {
+        return current.filter((id) => !filteredIds.has(id));
+      }
+      return Array.from(new Set([...current, ...visible]));
+    });
+  };
+
+  const openBulkMerge = () => {
+    if (bulkMergeIds.length === 0) return;
+    onBulkMerge?.(bulkMergeIds);
+    setBulkMergeIds([]);
   };
 
   const handleSplitSelect = (id: string) => {
@@ -266,6 +299,11 @@ export default function MerchantMaster({
             systemCategories={systemCategories}
             openRow={openRow}
             selectedId={selectedId}
+            bulkMergeIds={bulkMergeIds}
+            allVisibleSelected={allVisibleSelected}
+            onToggleBulkMergeId={toggleBulkMergeId}
+            onToggleAllVisibleBulkMergeIds={toggleAllVisibleBulkMergeIds}
+            onBulkMerge={onBulkMerge ? openBulkMerge : undefined}
             drawerOpen={drawerOpen}
             statsCollapsed={!showStats}
             drawer={
@@ -342,6 +380,11 @@ function TableWorkspace(props: {
   systemCategories: SystemCategoryOption[];
   openRow: (id: string) => void;
   selectedId: string | null;
+  bulkMergeIds: string[];
+  allVisibleSelected: boolean;
+  onToggleBulkMergeId: (id: string) => void;
+  onToggleAllVisibleBulkMergeIds: () => void;
+  onBulkMerge?: () => void;
   drawerOpen: boolean;
   statsCollapsed: boolean;
   drawer: React.ReactNode;
@@ -357,13 +400,18 @@ function TableWorkspace(props: {
     systemCategories,
     openRow,
     selectedId,
+    bulkMergeIds,
+    allVisibleSelected,
+    onToggleBulkMergeId,
+    onToggleAllVisibleBulkMergeIds,
+    onBulkMerge,
     drawerOpen,
     statsCollapsed,
     drawer,
   } = props;
   const cols = {
     display: 'grid',
-    gridTemplateColumns: '2.3fr 1.3fr 1.7fr 0.8fr 0.8fr 1.3fr 1.5fr 1.1fr',
+    gridTemplateColumns: '44px 2.3fr 1.3fr 1.7fr 0.8fr 0.8fr 1.3fr 1.5fr 1.1fr',
   } as const;
 
   return (
@@ -387,6 +435,17 @@ function TableWorkspace(props: {
             </option>
           ))}
         </select>
+        {onBulkMerge ? (
+          <button
+            type="button"
+            className="mm-btn mm-btn--secondary"
+            disabled={bulkMergeIds.length === 0}
+            onClick={onBulkMerge}
+          >
+            <GitMerge size={15} />
+            Merge selected{bulkMergeIds.length > 0 ? ` (${bulkMergeIds.length})` : ''}
+          </button>
+        ) : null}
         <div className="mm-seg">
           <button
             type="button"
@@ -407,6 +466,15 @@ function TableWorkspace(props: {
 
       <div className={`mm-table__scroll${statsCollapsed ? ' is-expanded' : ''}`}>
         <div className="mm-row mm-thead" style={cols}>
+          <div className="mm-th">
+            <input
+              type="checkbox"
+              aria-label="Select all visible merchants for merge"
+              checked={allVisibleSelected}
+              disabled={filtered.length === 0}
+              onChange={onToggleAllVisibleBulkMergeIds}
+            />
+          </div>
           <div className="mm-th">Merchant</div>
           <div className="mm-th">Category</div>
           <div className="mm-th">Primary ID</div>
@@ -422,6 +490,7 @@ function TableWorkspace(props: {
           const v = VERIFICATION_META[m.verificationLevel];
           const av = avatarTone(m.id);
           const selected = drawerOpen && selectedId === m.id;
+          const checkedForMerge = bulkMergeIds.includes(m.id);
           return (
             <div
               key={m.id}
@@ -429,6 +498,15 @@ function TableWorkspace(props: {
               style={cols}
               onClick={() => openRow(m.id)}
             >
+              <div>
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${m.canonicalName} for merge`}
+                  checked={checkedForMerge}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={() => onToggleBulkMergeId(m.id)}
+                />
+              </div>
               <div className="mm-merchant">
                 <span className="mm-avatar mm-avatar--sm" style={{ background: av.bg, color: av.fg }}>
                   {initials(m.canonicalName)}

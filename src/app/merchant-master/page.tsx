@@ -19,7 +19,6 @@ import {
   useMerchantProfiles,
   useSaveMerchantProfileBatch,
 } from '@/lib/hooks/useMerchantProfiles';
-import type { MerchantProfile as ApiProfile } from '@/types';
 import '@/components/merchant-master/tokens.css';
 import '@/components/merchant-master/merchant-master.css';
 
@@ -173,9 +172,9 @@ export default function MerchantMasterPage() {
     }
   };
 
-  const openMergeDialog = (merchant?: UiProfile) => {
+  const openMergeDialog = (merchant?: UiProfile, duplicateIds: string[] = []) => {
     setMergeSurvivorId(merchant?.id ?? null);
-    setMergeDuplicateIds([]);
+    setMergeDuplicateIds(duplicateIds.filter((id) => id !== merchant?.id));
     setIsMergeOpen(true);
   };
 
@@ -224,6 +223,7 @@ export default function MerchantMasterPage() {
             onSaveProfile={handleSaveProfile}
             onAddMerchant={() => setIsCreateOpen(true)}
             onMerge={(merchant) => openMergeDialog(merchant)}
+            onBulkMerge={(merchantIds) => openMergeDialog(undefined, merchantIds)}
             onSignalsTabOpen={setSignalsMerchantId}
             signalsLoadingId={isDetailLoading ? signalsMerchantId : null}
             signalsError={
@@ -243,6 +243,7 @@ export default function MerchantMasterPage() {
         />
 
         <MerchantProfileMergeDialog
+          key={`${isMergeOpen ? 'open' : 'closed'}-${mergeSurvivorId ?? 'none'}-${mergeDuplicateIds.join(',')}`}
           merchants={apiMerchants}
           systemCategories={systemCategories}
           open={isMergeOpen}
