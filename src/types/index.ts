@@ -283,6 +283,13 @@ export interface MerchantAliasCleanupAction {
   reasons: string[];
 }
 
+export interface MerchantAliasCleanupCorrection {
+  aliasId: string;
+  decision: 'accept' | 'skip' | 'keep_original' | 'custom_name';
+  customName?: string;
+  remember?: boolean;
+}
+
 export interface MerchantAliasCleanupResult {
   mode: 'dry_run' | 'apply';
   applied: boolean;
@@ -296,6 +303,8 @@ export interface MerchantAliasCleanupResult {
   };
   actions: MerchantAliasCleanupAction[];
   changes?: MerchantAliasCleanupAction[];
+  protectedCount?: number;
+  learnedCount?: number;
   appliedSummary?: {
     scanned: number;
     kept: number;

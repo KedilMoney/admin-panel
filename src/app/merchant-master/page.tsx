@@ -14,14 +14,12 @@ import {
 import { CreateMerchantDialog } from '@/components/merchant-master/create-merchant-dialog';
 import { MerchantProfileMergeDialog } from '@/components/merchant-master/merchant-profile-merge-dialog';
 import type { MerchantProfile as UiProfile } from '@/components/merchant-master/types';
+import Link from 'next/link';
 import {
   useMerchantProfileDetail,
   useMerchantProfiles,
-  useRunMerchantAliasCleanup,
   useSaveMerchantProfileBatch,
 } from '@/lib/hooks/useMerchantProfiles';
-import { MerchantAliasCleanupPanel } from '@/components/merchant-master/merchant-alias-cleanup-panel';
-import type { MerchantAliasCleanupResult } from '@/types';
 import '@/components/merchant-master/tokens.css';
 import '@/components/merchant-master/merchant-master.css';
 
@@ -56,12 +54,9 @@ export default function MerchantMasterPage() {
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [mergeSurvivorId, setMergeSurvivorId] = useState<string | null>(null);
   const [mergeDuplicateIds, setMergeDuplicateIds] = useState<string[]>([]);
-  const [cleanupReport, setCleanupReport] = useState<MerchantAliasCleanupResult | null>(null);
-  const [cleanupError, setCleanupError] = useState('');
 
   const { data, isLoading, error, refetch } = useMerchantProfiles();
   const saveBatch = useSaveMerchantProfileBatch();
-  const aliasCleanup = useRunMerchantAliasCleanup();
   const {
     data: detailData,
     isLoading: isDetailLoading,
@@ -184,27 +179,21 @@ export default function MerchantMasterPage() {
     setIsMergeOpen(true);
   };
 
-  const runAliasCleanup = async (apply: boolean, skipAliasIds: string[] = []) => {
-    setCleanupError('');
-    try {
-      const report = await aliasCleanup.mutateAsync({ apply, skipAliasIds });
-      setCleanupReport(report);
-      if (apply) {
-        await refetch();
-      }
-    } catch (failure) {
-      setCleanupError(formatSubmitError(failure));
-    }
-  };
-
   const cleanupMaintenancePanel = (
-    <MerchantAliasCleanupPanel
-      report={cleanupReport}
-      isRunning={aliasCleanup.isPending}
-      error={cleanupError}
-      onRunDryScan={() => runAliasCleanup(false)}
-      onApply={(skipAliasIds) => runAliasCleanup(true, skipAliasIds)}
-    />
+    <section className="mm-maintenance" aria-label="Merchant alias cleanup">
+      <div>
+        <div className="mm-maintenance__title">Alias cleanup</div>
+        <div className="mm-maintenance__copy">
+          Review noisy bank-statement aliases in a full-page workspace with per-row corrections
+          and protected-alias learning.
+        </div>
+      </div>
+      <div className="mm-maintenance__actions">
+        <Link href="/merchant-master/alias-cleanup" className="mm-btn mm-btn--dark">
+          Open cleanup workspace
+        </Link>
+      </div>
+    </section>
   );
 
   if (isLoading) {

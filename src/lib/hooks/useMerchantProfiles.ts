@@ -8,6 +8,7 @@ import {
   type MerchantProfilePayload,
   type SplitMerchantPayload,
 } from '@/lib/api/merchantProfiles';
+import type { MerchantAliasCleanupCorrection } from '@/types';
 
 export const merchantProfilesQueryKey = ['merchant-profiles'] as const;
 
@@ -110,8 +111,15 @@ export const useRunMerchantAliasCleanup = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ apply, skipAliasIds }: { apply: boolean; skipAliasIds?: string[] }) =>
-      merchantProfilesApi.runAliasCleanup(apply, skipAliasIds ?? []),
+    mutationFn: ({
+      apply,
+      skipAliasIds,
+      corrections,
+    }: {
+      apply: boolean;
+      skipAliasIds?: string[];
+      corrections?: MerchantAliasCleanupCorrection[];
+    }) => merchantProfilesApi.runAliasCleanup(apply, { skipAliasIds, corrections }),
     onSuccess: (_data, variables) => {
       if (variables.apply) {
         queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });

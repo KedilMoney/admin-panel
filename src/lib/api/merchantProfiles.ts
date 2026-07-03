@@ -1,5 +1,6 @@
 import { api } from './client';
 import type {
+  MerchantAliasCleanupCorrection,
   MerchantAliasCleanupResult,
   MerchantMergeJobResult,
   MerchantProfile,
@@ -146,11 +147,18 @@ export const merchantProfilesApi = {
 
   runAliasCleanup: async (
     apply: boolean,
-    skipAliasIds: string[] = []
+    options: {
+      skipAliasIds?: string[];
+      corrections?: MerchantAliasCleanupCorrection[];
+    } = {}
   ): Promise<MerchantAliasCleanupResult> => {
     const response = await api.post<MerchantAliasCleanupResult>(
       '/api/admin/merchant-profiles/alias-cleanup',
-      { apply, skipAliasIds }
+      {
+        apply,
+        skipAliasIds: options.skipAliasIds ?? [],
+        corrections: options.corrections ?? [],
+      }
     );
     return response.data.data;
   },
