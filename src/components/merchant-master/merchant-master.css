@@ -96,6 +96,68 @@
 .mm-seg button { padding: 6px 14px; border-radius: var(--radius-pill); border: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: var(--fw-bold); background: transparent; color: var(--text-secondary); transition: all var(--dur-micro) var(--ease); }
 .mm-seg button.is-active { background: #fff; color: var(--text-strong); box-shadow: var(--shadow-pop); }
 
+/* ---- Maintenance panel ---- */
+.mm-maintenance {
+  margin: 0 32px 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--line-200);
+  border-radius: var(--radius-card);
+  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+}
+.mm-maintenance__title { font-size: 15px; font-weight: var(--fw-heavy); color: var(--navy-900); margin-bottom: 5px; }
+.mm-maintenance__copy { font-size: 13px; color: var(--text-secondary); line-height: 1.45; }
+.mm-maintenance__actions { display: flex; gap: 10px; align-items: center; }
+.mm-maintenance__error {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bad-100);
+  color: var(--bad-text);
+  font-size: 13px;
+  font-weight: var(--fw-bold);
+}
+.mm-cleanup-report {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line-100);
+  padding-top: 14px;
+}
+.mm-cleanup-report__meta {
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caps);
+}
+.mm-cleanup-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.mm-cleanup-summary span {
+  padding: 5px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-subtle);
+  color: var(--text-heading);
+  font-size: 12px;
+  font-weight: var(--fw-bold);
+}
+.mm-cleanup-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mm-cleanup-sample {
+  border: 1px solid var(--line-100);
+  border-radius: 11px;
+  padding: 12px;
+  min-width: 0;
+}
+.mm-cleanup-sample__title { font-size: 12px; font-weight: var(--fw-heavy); color: var(--navy-900); margin-bottom: 8px; }
+.mm-cleanup-sample ul { margin: 0; padding-left: 18px; }
+.mm-cleanup-sample li {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 /* ---- Table ---- */
 .mm-table__scroll { max-height: 452px; overflow-y: auto; transition: max-height 240ms cubic-bezier(0.4, 0, 0.2, 1); }
 .mm-table__scroll.is-expanded { max-height: min(72vh, 620px); }

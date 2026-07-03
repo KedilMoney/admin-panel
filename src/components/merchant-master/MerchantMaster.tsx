@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { GitMerge, Plus, Search } from 'lucide-react';
 import type { SystemCategoryOption } from '@/types';
 import { MerchantDrawer, MerchantProfilePanel } from './MerchantDetail';
@@ -36,6 +36,7 @@ export interface MerchantMasterProps {
   onTrackRemoveIdentifier?: (merchantId: string, identifierId: string) => void;
   onTrackRemoveAlias?: (merchantId: string, aliasId: string) => void;
   saveError?: string;
+  maintenancePanel?: ReactNode;
 }
 
 const confColorVar = (c: number) => {
@@ -73,6 +74,7 @@ export default function MerchantMaster({
   onTrackRemoveIdentifier,
   onTrackRemoveAlias,
   saveError,
+  maintenancePanel,
 }: MerchantMasterProps) {
   const [query, setQuery] = useState('');
   const [trust, setTrust] = useState('all');
@@ -249,6 +251,8 @@ export default function MerchantMaster({
             </button>
           </div>
         </div>
+
+        {maintenancePanel}
 
         {!showStats && !merchantActive ? (
           <div

@@ -1,5 +1,6 @@
 import { api } from './client';
 import type {
+  MerchantAliasCleanupResult,
   MerchantMergeJobResult,
   MerchantProfile,
   SystemCategoryOption,
@@ -139,6 +140,14 @@ export const merchantProfilesApi = {
   runMergeJob: async (): Promise<MerchantMergeJobResult> => {
     const response = await api.post<MerchantMergeJobResult>(
       '/api/admin/merchant-profiles/merge-job'
+    );
+    return response.data.data;
+  },
+
+  runAliasCleanup: async (apply: boolean): Promise<MerchantAliasCleanupResult> => {
+    const response = await api.post<MerchantAliasCleanupResult>(
+      '/api/admin/merchant-profiles/alias-cleanup',
+      { apply }
     );
     return response.data.data;
   },

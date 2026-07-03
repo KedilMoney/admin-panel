@@ -106,6 +106,19 @@ export const useRunMerchantMergeJob = () => {
   });
 };
 
+export const useRunMerchantAliasCleanup = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ apply }: { apply: boolean }) => merchantProfilesApi.runAliasCleanup(apply),
+    onSuccess: (_data, variables) => {
+      if (variables.apply) {
+        queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
+      }
+    },
+  });
+};
+
 export const useAddMerchantIdentifier = () => {
   const queryClient = useQueryClient();
 

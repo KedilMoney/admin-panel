@@ -269,3 +269,36 @@ export interface MerchantMergeJobResult {
   deletedProfiles: number;
 }
 
+export interface MerchantAliasCleanupAction {
+  type: 'keep' | 'update' | 'delete' | 'merge';
+  aliasId?: string;
+  sourceAliasId?: string;
+  targetAliasId?: string;
+  merchantProfileId: string;
+  rawName: string;
+  sanitizedName: string | null;
+  seenCount?: number;
+  bankSource?: string | null;
+  reasons: string[];
+}
+
+export interface MerchantAliasCleanupResult {
+  mode: 'dry_run' | 'apply';
+  applied: boolean;
+  summary: {
+    scanned: number;
+    kept: number;
+    normalized: number;
+    deleted: number;
+    merged: number;
+    ambiguous: number;
+  };
+  actions: MerchantAliasCleanupAction[];
+  samples: {
+    normalized: MerchantAliasCleanupAction[];
+    deleted: MerchantAliasCleanupAction[];
+    merged: MerchantAliasCleanupAction[];
+    ambiguous: MerchantAliasCleanupAction[];
+  };
+}
+
