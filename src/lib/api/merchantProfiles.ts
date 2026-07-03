@@ -144,10 +144,13 @@ export const merchantProfilesApi = {
     return response.data.data;
   },
 
-  runAliasCleanup: async (apply: boolean): Promise<MerchantAliasCleanupResult> => {
+  runAliasCleanup: async (
+    apply: boolean,
+    skipAliasIds: string[] = []
+  ): Promise<MerchantAliasCleanupResult> => {
     const response = await api.post<MerchantAliasCleanupResult>(
       '/api/admin/merchant-profiles/alias-cleanup',
-      { apply }
+      { apply, skipAliasIds }
     );
     return response.data.data;
   },

@@ -275,6 +275,7 @@ export interface MerchantAliasCleanupAction {
   sourceAliasId?: string;
   targetAliasId?: string;
   merchantProfileId: string;
+  merchantName?: string;
   rawName: string;
   sanitizedName: string | null;
   seenCount?: number;
@@ -294,6 +295,15 @@ export interface MerchantAliasCleanupResult {
     ambiguous: number;
   };
   actions: MerchantAliasCleanupAction[];
+  changes?: MerchantAliasCleanupAction[];
+  appliedSummary?: {
+    scanned: number;
+    kept: number;
+    normalized: number;
+    deleted: number;
+    merged: number;
+    ambiguous: number;
+  };
   samples: {
     normalized: MerchantAliasCleanupAction[];
     deleted: MerchantAliasCleanupAction[];

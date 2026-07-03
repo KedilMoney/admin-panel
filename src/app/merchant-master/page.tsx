@@ -20,7 +20,8 @@ import {
   useRunMerchantAliasCleanup,
   useSaveMerchantProfileBatch,
 } from '@/lib/hooks/useMerchantProfiles';
-import type { MerchantAliasCleanupAction, MerchantAliasCleanupResult } from '@/types';
+import { MerchantAliasCleanupPanel } from '@/components/merchant-master/merchant-alias-cleanup-panel';
+import type { MerchantAliasCleanupResult } from '@/types';
 import '@/components/merchant-master/tokens.css';
 import '@/components/merchant-master/merchant-master.css';
 
@@ -41,22 +42,6 @@ const formatSubmitError = (error: unknown) => {
   }
   if (error instanceof Error) return error.message;
   return 'Unable to save merchant profile.';
-};
-
-const cleanupSampleGroups: Array<{
-  key: keyof MerchantAliasCleanupResult['samples'];
-  label: string;
-}> = [
-  { key: 'normalized', label: 'Will normalize' },
-  { key: 'merged', label: 'Will merge duplicates' },
-  { key: 'deleted', label: 'Will delete' },
-  { key: 'ambiguous', label: 'Needs review' },
-];
-
-const formatCleanupAction = (action: MerchantAliasCleanupAction) => {
-  if (action.type === 'delete') return action.rawName;
-  if (action.type === 'merge') return `${action.rawName} -> ${action.sanitizedName}`;
-  return `${action.rawName} -> ${action.sanitizedName}`;
 };
 
 export default function MerchantMasterPage() {
@@ -199,10 +184,10 @@ export default function MerchantMasterPage() {
     setIsMergeOpen(true);
   };
 
-  const runAliasCleanup = async (apply: boolean) => {
+  const runAliasCleanup = async (apply: boolean, skipAliasIds: string[] = []) => {
     setCleanupError('');
     try {
-      const report = await aliasCleanup.mutateAsync({ apply });
+      const report = await aliasCleanup.mutateAsync({ apply, skipAliasIds });
       setCleanupReport(report);
       if (apply) {
         await refetch();
@@ -213,68 +198,13 @@ export default function MerchantMasterPage() {
   };
 
   const cleanupMaintenancePanel = (
-    <section className="mm-maintenance" aria-label="Merchant alias cleanup">
-      <div>
-        <div className="mm-maintenance__title">Alias cleanup</div>
-        <div className="mm-maintenance__copy">
-          Scan global merchant aliases for UPI refs, payment IDs, and bank descriptor noise before
-          applying safe fixes.
-        </div>
-      </div>
-      <div className="mm-maintenance__actions">
-        <button
-          type="button"
-          className="mm-btn mm-btn--secondary"
-          disabled={aliasCleanup.isPending}
-          onClick={() => runAliasCleanup(false)}
-        >
-          {aliasCleanup.isPending ? 'Running...' : 'Run dry scan'}
-        </button>
-        <button
-          type="button"
-          className="mm-btn mm-btn--dark"
-          disabled={aliasCleanup.isPending || !cleanupReport}
-          onClick={() => runAliasCleanup(true)}
-        >
-          Apply cleanup
-        </button>
-      </div>
-
-      {cleanupError ? <div className="mm-maintenance__error">{cleanupError}</div> : null}
-
-      {cleanupReport ? (
-        <div className="mm-cleanup-report">
-          <div className="mm-cleanup-report__meta">
-            Last run: {cleanupReport.mode === 'apply' ? 'applied' : 'dry scan'}
-          </div>
-          <div className="mm-cleanup-summary">
-            <span>Scanned {cleanupReport.summary.scanned}</span>
-            <span>Normalize {cleanupReport.summary.normalized}</span>
-            <span>Merge {cleanupReport.summary.merged}</span>
-            <span>Delete {cleanupReport.summary.deleted}</span>
-            <span>Review {cleanupReport.summary.ambiguous}</span>
-          </div>
-          <div className="mm-cleanup-samples">
-            {cleanupSampleGroups.map(({ key, label }) => {
-              const samples = cleanupReport.samples[key];
-              if (samples.length === 0) return null;
-              return (
-                <div key={key} className="mm-cleanup-sample">
-                  <div className="mm-cleanup-sample__title">{label}</div>
-                  <ul>
-                    {samples.slice(0, 5).map((sample) => (
-                      <li key={`${key}-${sample.aliasId ?? sample.sourceAliasId}`}>
-                        {formatCleanupAction(sample)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-    </section>
+    <MerchantAliasCleanupPanel
+      report={cleanupReport}
+      isRunning={aliasCleanup.isPending}
+      error={cleanupError}
+      onRunDryScan={() => runAliasCleanup(false)}
+      onApply={(skipAliasIds) => runAliasCleanup(true, skipAliasIds)}
+    />
   );
 
   if (isLoading) {

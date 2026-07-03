@@ -142,20 +142,70 @@
   font-size: 12px;
   font-weight: var(--fw-bold);
 }
-.mm-cleanup-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.mm-cleanup-sample {
-  border: 1px solid var(--line-100);
-  border-radius: 11px;
-  padding: 12px;
-  min-width: 0;
-}
-.mm-cleanup-sample__title { font-size: 12px; font-weight: var(--fw-heavy); color: var(--navy-900); margin-bottom: 8px; }
-.mm-cleanup-sample ul { margin: 0; padding-left: 18px; }
-.mm-cleanup-sample li {
-  font-size: 12px;
+.mm-cleanup-explainer {
+  grid-column: 1 / -1;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.5;
+}
+.mm-cleanup-explainer p { margin: 0 0 8px; }
+.mm-cleanup-explainer ul { margin: 0 0 8px 18px; padding: 0; }
+.mm-cleanup-explainer li { margin-bottom: 4px; }
+.mm-cleanup-explainer__hint { margin: 0; color: var(--text-muted); font-size: 12px; }
+.mm-cleanup-review-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.mm-cleanup-table-wrap {
+  grid-column: 1 / -1;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--line-200);
+  border-radius: 12px;
+}
+.mm-cleanup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.mm-cleanup-table th,
+.mm-cleanup-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-100);
+  text-align: left;
+  vertical-align: top;
+}
+.mm-cleanup-table th {
+  position: sticky;
+  top: 0;
+  background: #fbfbfc;
+  font-size: 11px;
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.mm-cleanup-table tr.is-skipped td {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.mm-cleanup-table__mono {
+  font-family: ui-monospace, Menlo, monospace;
   word-break: break-word;
+  max-width: 280px;
+}
+.mm-cleanup-table__empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
 }
 
 /* ---- Table ---- */

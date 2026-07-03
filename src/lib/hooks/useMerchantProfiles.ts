@@ -110,7 +110,8 @@ export const useRunMerchantAliasCleanup = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ apply }: { apply: boolean }) => merchantProfilesApi.runAliasCleanup(apply),
+    mutationFn: ({ apply, skipAliasIds }: { apply: boolean; skipAliasIds?: string[] }) =>
+      merchantProfilesApi.runAliasCleanup(apply, skipAliasIds ?? []),
     onSuccess: (_data, variables) => {
       if (variables.apply) {
         queryClient.invalidateQueries({ queryKey: merchantProfilesQueryKey });
