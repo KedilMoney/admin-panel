@@ -67,6 +67,14 @@ function actionLabel(action: MerchantAliasCleanupAction): string {
   return 'Rename';
 }
 
+function effectiveSuggestedAlias(
+  action: MerchantAliasCleanupAction,
+  decision: RowDecision
+): string {
+  if (decision === 'force_delete' || action.type === 'delete') return '— remove —';
+  return action.sanitizedName ?? '—';
+}
+
 function reasonText(action: MerchantAliasCleanupAction): string {
   const labels: Record<string, string> = {
     payment_reference: 'Payment reference number',
@@ -77,6 +85,7 @@ function reasonText(action: MerchantAliasCleanupAction): string {
     normalized: 'Formatting cleanup',
     admin_protected: 'Protected from a prior review',
     admin_corrected: 'Corrected by admin',
+    admin_force_delete: 'Marked for removal by admin',
   };
   if (action.reasons.length === 0) return 'Looks like bank-statement noise';
   return action.reasons.map((reason) => labels[reason] ?? reason).join(' · ');
@@ -199,6 +208,12 @@ export function AliasCleanupWorkspace() {
   const allPageSelected =
     pageItems.length > 0 && pageItems.every((action) => rowStates[actionId(action)]?.selected);
 
+  const selectedRemoveCount = useMemo(() => {
+    return selectedChanges.filter(
+      (action) => rowStates[actionId(action)]?.decision === 'force_delete'
+    ).length;
+  }, [selectedChanges, rowStates]);
+
   const resetWorkspace = () => {
     setStep('intro');
     setReport(null);
@@ -297,6 +312,21 @@ export function AliasCleanupWorkspace() {
 
   const togglePageSelection = () => {
     setSelectionForActions(pageItems, !allPageSelected);
+  };
+
+  const markActionsAsRemoveJunk = (actions: MerchantAliasCleanupAction[]) => {
+    setRowStates((current) => {
+      const next = { ...current };
+      for (const action of actions) {
+        const id = actionId(action);
+        next[id] = {
+          ...(next[id] ?? createRowState(action)),
+          selected: true,
+          decision: 'force_delete',
+        };
+      }
+      return next;
+    });
   };
 
   return (
@@ -468,9 +498,9 @@ export function AliasCleanupWorkspace() {
               <CardHeader>
                 <CardTitle>Review proposed changes</CardTitle>
                 <CardDescription>
-                  Select rows to include in the next apply batch. Search for a merchant like
-                  &quot;SANTHIGI&quot;, use bulk select on the filtered results, then apply only
-                  those changes.
+                  Select rows to include in the next apply batch. Override the system action
+                  when a suggested rename is still junk — choose &quot;Remove junk alias&quot;
+                  to delete it instead.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -478,6 +508,9 @@ export function AliasCleanupWorkspace() {
                   <Badge variant="secondary">
                     {selectedChanges.length} selected for apply
                   </Badge>
+                  {selectedRemoveCount > 0 ? (
+                    <Badge variant="destructive">{selectedRemoveCount} marked remove junk</Badge>
+                  ) : null}
                   <Badge variant="outline">{changes.length} total proposed</Badge>
                   <Badge variant="outline">{filteredChanges.length} matching filter</Badge>
                   {search.trim() ? (
@@ -545,6 +578,22 @@ export function AliasCleanupWorkspace() {
                   <Button
                     size="sm"
                     variant="outline"
+                    disabled={filteredChanges.length === 0}
+                    onClick={() => markActionsAsRemoveJunk(filteredChanges)}
+                  >
+                    Mark filtered as remove junk
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={selectedChanges.length === 0}
+                    onClick={() => markActionsAsRemoveJunk(selectedChanges)}
+                  >
+                    Mark selected as remove junk
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
                     disabled={changes.length === 0}
                     onClick={() => setSelectionForActions(changes, false)}
                   >
@@ -602,12 +651,18 @@ export function AliasCleanupWorkspace() {
                               <TableCell className="font-medium">
                                 {action.merchantName ?? 'Unknown merchant'}
                               </TableCell>
-                              <TableCell>{actionLabel(action)}</TableCell>
+                              <TableCell>
+                                {state.selected && state.decision === 'force_delete' ? (
+                                  <Badge variant="destructive">Remove junk</Badge>
+                                ) : (
+                                  actionLabel(action)
+                                )}
+                              </TableCell>
                               <TableCell className="max-w-[280px] break-all font-mono text-xs">
                                 {action.rawName}
                               </TableCell>
                               <TableCell className="max-w-[220px] break-all font-mono text-xs">
-                                {action.type === 'delete' ? '— remove —' : action.sanitizedName}
+                                {effectiveSuggestedAlias(action, state.decision)}
                               </TableCell>
                               <TableCell className="max-w-[220px] text-xs text-[var(--muted-foreground)]">
                                 {reasonText(action)}
@@ -625,6 +680,7 @@ export function AliasCleanupWorkspace() {
                                   }
                                 >
                                   <option value="accept">Accept suggestion</option>
+                                  <option value="force_delete">Remove junk alias</option>
                                   <option value="keep_original">Keep original alias</option>
                                   <option value="custom_name">Use custom name</option>
                                 </select>
@@ -634,6 +690,8 @@ export function AliasCleanupWorkspace() {
                                   <span className="text-xs text-[var(--muted-foreground)]">
                                     Not in batch
                                   </span>
+                                ) : state.decision === 'force_delete' ? (
+                                  <span className="text-xs text-red-700">Will delete alias</span>
                                 ) : state.decision === 'custom_name' ? (
                                   <Input
                                     value={state.customName}

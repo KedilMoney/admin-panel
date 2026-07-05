@@ -285,7 +285,7 @@ export interface MerchantAliasCleanupAction {
 
 export interface MerchantAliasCleanupCorrection {
   aliasId: string;
-  decision: 'accept' | 'skip' | 'keep_original' | 'custom_name';
+  decision: 'accept' | 'skip' | 'keep_original' | 'custom_name' | 'force_delete';
   customName?: string;
   remember?: boolean;
 }
