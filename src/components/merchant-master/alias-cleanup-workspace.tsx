@@ -11,7 +11,6 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,60 +22,47 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useRunMerchantAliasCleanup } from '@/lib/hooks/useMerchantProfiles';
+import {
+  useMerchantProfiles,
+  useRunMerchantAliasCleanup,
+} from '@/lib/hooks/useMerchantProfiles';
 import type {
   MerchantAliasCleanupAction,
   MerchantAliasCleanupCorrection,
   MerchantAliasCleanupResult,
 } from '@/types';
 
-type CleanupFilter = 'all' | 'update' | 'merge' | 'delete';
-type RowActionChoice = 'merge' | 'rename' | 'delete' | 'keep';
+type RowAction = 'system' | 'link' | 'rename' | 'delete' | 'keep';
 type WorkspaceStep = 'intro' | 'review' | 'done';
 
 type RowState = {
   selected: boolean;
-  actionChoice: RowActionChoice;
+  action: RowAction;
   renameTo: string;
+  linkToMerchantId: string;
 };
 
 const PAGE_SIZE = 40;
 
-const FILTER_LABELS: Record<CleanupFilter, string> = {
-  all: 'All',
-  update: 'Renames',
-  merge: 'Duplicates',
-  delete: 'Junk',
-};
-
-const ACTION_LABELS: Record<RowActionChoice, string> = {
-  merge: 'Merge',
-  rename: 'Rename',
-  delete: 'Remove',
-  keep: 'Keep original',
-};
+const ACTION_OPTIONS: { value: RowAction; label: string }[] = [
+  { value: 'system', label: 'Use system suggestion' },
+  { value: 'link', label: 'Link to merchant' },
+  { value: 'rename', label: 'Rename' },
+  { value: 'delete', label: 'Delete alias' },
+  { value: 'keep', label: 'Keep unchanged' },
+];
 
 function actionId(action: MerchantAliasCleanupAction): string {
   if (action.type === 'merge') return action.sourceAliasId ?? action.aliasId ?? action.rawName;
   return action.aliasId ?? action.rawName;
 }
 
-function actionKind(action: MerchantAliasCleanupAction): CleanupFilter {
-  if (action.type === 'merge') return 'merge';
-  if (action.type === 'delete') return 'delete';
-  return 'update';
-}
-
-function systemActionLabel(action: MerchantAliasCleanupAction): string {
-  if (action.type === 'delete') return 'Remove';
-  if (action.type === 'merge') return 'Merge';
-  return 'Rename';
-}
-
-function defaultActionChoice(action: MerchantAliasCleanupAction): RowActionChoice {
-  if (action.type === 'merge') return 'merge';
-  if (action.type === 'delete') return 'delete';
-  return 'rename';
+function systemSuggestionText(action: MerchantAliasCleanupAction): string {
+  if (action.type === 'delete') return 'Delete this alias';
+  if (action.type === 'merge') {
+    return `Combine into "${action.sanitizedName ?? action.merchantName ?? 'canonical alias'}"`;
+  }
+  return `Rename to "${action.sanitizedName ?? '—'}"`;
 }
 
 function defaultRenameTo(action: MerchantAliasCleanupAction): string {
@@ -84,27 +70,12 @@ function defaultRenameTo(action: MerchantAliasCleanupAction): string {
   return (action.sanitizedName ?? action.merchantName ?? '').trim();
 }
 
-function reasonText(action: MerchantAliasCleanupAction): string {
-  const labels: Record<string, string> = {
-    payment_reference: 'Payment reference number',
-    upi_handle: 'UPI handle',
-    bank_or_payment_noise: 'Bank/payment boilerplate',
-    only_noise: 'No merchant name left',
-    too_short: 'Too short',
-    normalized: 'Formatting cleanup',
-    admin_protected: 'Protected from a prior review',
-    admin_corrected: 'Corrected by admin',
-    admin_force_delete: 'Marked for removal by admin',
-  };
-  if (action.reasons.length === 0) return 'Looks like bank-statement noise';
-  return action.reasons.map((reason) => labels[reason] ?? reason).join(' · ');
-}
-
 function createRowState(action: MerchantAliasCleanupAction): RowState {
   return {
     selected: false,
-    actionChoice: defaultActionChoice(action),
+    action: 'system',
     renameTo: defaultRenameTo(action),
+    linkToMerchantId: '',
   };
 }
 
@@ -132,12 +103,17 @@ function buildCorrections(
     const state = rowStates[id] ?? createRowState(action);
     if (!state.selected) continue;
 
-    if (state.actionChoice === 'keep') {
+    if (state.action === 'keep') {
       corrections.push({ aliasId: id, decision: 'keep_original', remember: true });
       continue;
     }
 
-    if (state.actionChoice === 'delete') {
+    if (state.action === 'system') {
+      corrections.push({ aliasId: id, decision: 'accept' });
+      continue;
+    }
+
+    if (state.action === 'delete') {
       if (action.type === 'delete') {
         corrections.push({ aliasId: id, decision: 'accept' });
       } else {
@@ -146,17 +122,21 @@ function buildCorrections(
       continue;
     }
 
-    if (state.actionChoice === 'merge') {
-      corrections.push({ aliasId: id, decision: 'accept' });
+    if (state.action === 'link') {
+      if (!state.linkToMerchantId) continue;
+      corrections.push({
+        aliasId: id,
+        decision: 'assign_to_merchant',
+        targetMerchantProfileId: state.linkToMerchantId,
+      });
       continue;
     }
 
-    if (state.actionChoice === 'rename') {
+    if (state.action === 'rename') {
       const customName = state.renameTo.trim();
       if (!customName) continue;
       const systemName = defaultRenameTo(action);
-      const systemChoice = defaultActionChoice(action);
-      if (systemChoice === 'rename' && customName === systemName) {
+      if (action.type === 'update' && customName === systemName) {
         corrections.push({ aliasId: id, decision: 'accept' });
       } else {
         corrections.push({ aliasId: id, decision: 'custom_name', customName });
@@ -175,30 +155,21 @@ function initRowStates(actions: MerchantAliasCleanupAction[]): Record<string, Ro
   return initialStates;
 }
 
-function availableActionChoices(action: MerchantAliasCleanupAction): RowActionChoice[] {
-  const choices: RowActionChoice[] = ['rename', 'delete', 'keep'];
-  if (action.type === 'merge') choices.unshift('merge');
-  return choices;
-}
-
-function resultPreview(action: MerchantAliasCleanupAction, state: RowState): string {
-  if (state.actionChoice === 'delete') return '— remove —';
-  if (state.actionChoice === 'keep') return action.rawName;
-  if (state.actionChoice === 'merge') return action.sanitizedName ?? '—';
-  return state.renameTo.trim() || '—';
-}
-
 export function AliasCleanupWorkspace() {
   const aliasCleanup = useRunMerchantAliasCleanup();
   const [step, setStep] = useState<WorkspaceStep>('intro');
   const [report, setReport] = useState<MerchantAliasCleanupResult | null>(null);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [filter, setFilter] = useState<CleanupFilter>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
+  const [merchantSearch, setMerchantSearch] = useState('');
+  const [bulkMerchantId, setBulkMerchantId] = useState('');
   const [bulkRenameValue, setBulkRenameValue] = useState('');
+
+  const { data: merchantData } = useMerchantProfiles(merchantSearch || undefined);
+  const merchants = merchantData?.merchants ?? [];
 
   const changes = useMemo(() => {
     if (!report) return [];
@@ -214,21 +185,15 @@ export function AliasCleanupWorkspace() {
 
   const filteredChanges = useMemo(() => {
     const query = search.trim().toLowerCase();
+    if (!query) return changes;
     return changes.filter((action) => {
-      if (filter !== 'all' && actionKind(action) !== filter) return false;
-      if (!query) return true;
-      const haystack = [
-        action.merchantName,
-        action.rawName,
-        action.sanitizedName,
-        systemActionLabel(action),
-      ]
+      const haystack = [action.merchantName, action.rawName, action.sanitizedName]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [changes, filter, search]);
+  }, [changes, search]);
 
   const pageCount = Math.max(1, Math.ceil(filteredChanges.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -241,31 +206,27 @@ export function AliasCleanupWorkspace() {
     return changes.filter((action) => rowStates[actionId(action)]?.selected);
   }, [changes, rowStates]);
 
-  const filteredSelectedCount = useMemo(() => {
-    return filteredChanges.filter((action) => rowStates[actionId(action)]?.selected).length;
-  }, [filteredChanges, rowStates]);
-
   const allPageSelected =
     pageItems.length > 0 && pageItems.every((action) => rowStates[actionId(action)]?.selected);
 
-  const actionCounts = useMemo(() => {
-    const counts = { merge: 0, rename: 0, delete: 0, keep: 0 };
-    for (const action of selectedChanges) {
-      const choice = rowStates[actionId(action)]?.actionChoice ?? defaultActionChoice(action);
-      counts[choice] += 1;
+  const merchantNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const merchant of merchants) {
+      map.set(merchant.id, merchant.canonicalName);
     }
-    return counts;
-  }, [selectedChanges, rowStates]);
+    return map;
+  }, [merchants]);
 
   const resetWorkspace = () => {
     setStep('intro');
     setReport(null);
     setError('');
     setSuccessMessage('');
-    setFilter('all');
     setSearch('');
     setPage(0);
     setRowStates({});
+    setMerchantSearch('');
+    setBulkMerchantId('');
     setBulkRenameValue('');
   };
 
@@ -292,16 +253,25 @@ export function AliasCleanupWorkspace() {
   const applyCleanup = async () => {
     if (!report) return;
     if (selectedChanges.length === 0) {
-      setError('Select at least one row to apply.');
+      setError('Select at least one row first.');
+      return;
+    }
+
+    const invalidLink = selectedChanges.some((action) => {
+      const state = rowStates[actionId(action)] ?? createRowState(action);
+      return state.action === 'link' && !state.linkToMerchantId;
+    });
+    if (invalidLink) {
+      setError('Some selected rows are set to "Link to merchant" but no merchant is chosen.');
       return;
     }
 
     const invalidRename = selectedChanges.some((action) => {
       const state = rowStates[actionId(action)] ?? createRowState(action);
-      return state.actionChoice === 'rename' && !state.renameTo.trim();
+      return state.action === 'rename' && !state.renameTo.trim();
     });
     if (invalidRename) {
-      setError('Selected rows set to Rename need a name. Fill in the New alias column or use bulk rename.');
+      setError('Some selected rows are set to Rename but the name is empty.');
       return;
     }
 
@@ -327,13 +297,11 @@ export function AliasCleanupWorkspace() {
 
       if (nextChanges.length === 0) {
         setStep('done');
-        setSuccessMessage(
-          `Applied ${appliedCount} change${appliedCount === 1 ? '' : 's'}. No remaining proposed changes.`
-        );
+        setSuccessMessage(`Done. Applied ${appliedCount} change${appliedCount === 1 ? '' : 's'}.`);
       } else {
         setStep('review');
         setSuccessMessage(
-          `Applied ${appliedCount} change${appliedCount === 1 ? '' : 's'}. ${nextChanges.length} proposed change${nextChanges.length === 1 ? '' : 's'} still remain — search, select, and apply the next batch when ready.`
+          `Applied ${appliedCount} change${appliedCount === 1 ? '' : 's'}. ${nextChanges.length} still left — continue when ready.`
         );
       }
     } catch (failure) {
@@ -345,7 +313,12 @@ export function AliasCleanupWorkspace() {
     setRowStates((current) => ({
       ...current,
       [id]: {
-        ...(current[id] ?? { selected: false, actionChoice: 'rename', renameTo: '' }),
+        ...(current[id] ?? {
+          selected: false,
+          action: 'system',
+          renameTo: '',
+          linkToMerchantId: '',
+        }),
         ...patch,
       },
     }));
@@ -364,51 +337,26 @@ export function AliasCleanupWorkspace() {
 
   const setBulkAction = (
     actions: MerchantAliasCleanupAction[],
-    choice: RowActionChoice,
-    options?: { renameTo?: string; useMerchantName?: boolean; select?: boolean }
+    action: RowAction,
+    extras?: { renameTo?: string; linkToMerchantId?: string }
   ) => {
     setRowStates((current) => {
       const next = { ...current };
-      for (const action of actions) {
-        const id = actionId(action);
-        const base = next[id] ?? createRowState(action);
-        const available = availableActionChoices(action);
-        const resolvedChoice = available.includes(choice)
-          ? choice
-          : choice === 'merge'
-            ? defaultActionChoice(action)
-            : choice;
-
-        let renameTo = base.renameTo;
-        if (resolvedChoice === 'rename') {
-          if (options?.useMerchantName) {
-            renameTo = (action.merchantName ?? defaultRenameTo(action)).trim();
-          } else if (options?.renameTo !== undefined) {
-            renameTo = options.renameTo;
-          }
-        }
-
+      for (const row of actions) {
+        const id = actionId(row);
+        const base = next[id] ?? createRowState(row);
         next[id] = {
           ...base,
-          selected: options?.select === false ? base.selected : true,
-          actionChoice: resolvedChoice,
-          renameTo,
-        };
-      }
-      return next;
-    });
-  };
-
-  const resetActionsToSystem = (actions: MerchantAliasCleanupAction[]) => {
-    setRowStates((current) => {
-      const next = { ...current };
-      for (const action of actions) {
-        const id = actionId(action);
-        const base = next[id] ?? createRowState(action);
-        next[id] = {
-          ...base,
-          actionChoice: defaultActionChoice(action),
-          renameTo: defaultRenameTo(action),
+          selected: true,
+          action,
+          renameTo:
+            action === 'rename'
+              ? (extras?.renameTo ?? base.renameTo ?? defaultRenameTo(row))
+              : base.renameTo,
+          linkToMerchantId:
+            action === 'link'
+              ? (extras?.linkToMerchantId ?? base.linkToMerchantId)
+              : base.linkToMerchantId,
         };
       }
       return next;
@@ -417,16 +365,6 @@ export function AliasCleanupWorkspace() {
 
   const togglePageSelection = () => {
     setSelectionForActions(pageItems, !allPageSelected);
-  };
-
-  const applyBulkRenameValue = (actions: MerchantAliasCleanupAction[]) => {
-    const name = bulkRenameValue.trim();
-    if (!name) {
-      setError('Enter a name in the bulk rename field first.');
-      return;
-    }
-    setError('');
-    setBulkAction(actions, 'rename', { renameTo: name, select: true });
   };
 
   return (
@@ -441,9 +379,9 @@ export function AliasCleanupWorkspace() {
             Back to Merchant Profiles
           </Link>
           <h1 className="text-3xl font-bold tracking-tight">Alias cleanup</h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--muted-foreground)]">
-            Search a merchant, select rows, pick the action (Merge / Rename / Remove), and apply in
-            small batches. Change the action when the system suggestion is wrong.
+          <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
+            Search aliases, select the rows you want, choose what to do, then apply. To attach
+            aliases to an existing merchant like Amazon, use &quot;Link to merchant&quot;.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -460,7 +398,7 @@ export function AliasCleanupWorkspace() {
               ) : (
                 <Play className="mr-2 h-4 w-4" />
               )}
-              Run dry scan
+              Scan aliases
             </Button>
           ) : null}
           {step === 'review' ? (
@@ -491,102 +429,20 @@ export function AliasCleanupWorkspace() {
         </div>
       ) : null}
 
-      {step === 'intro' ? (
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>1. Scan</CardTitle>
-              <CardDescription>
-                Read every alias in the database and compare it against cleanup rules.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>2. Pick actions</CardTitle>
-              <CardDescription>
-                Use the Action dropdown per row — or bulk-set Remove / Rename for many rows at once.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>3. Apply in batches</CardTitle>
-              <CardDescription>
-                Apply selected rows, then continue with the next merchant group until done.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      ) : null}
-
       {report && step !== 'intro' ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Scanned</CardDescription>
-                <CardTitle className="text-3xl">{report.summary.scanned}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-[var(--muted-foreground)]">
-                Total aliases checked
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Already fine</CardDescription>
-                <CardTitle className="text-3xl">{report.summary.kept}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-[var(--muted-foreground)]">
-                Left unchanged
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Proposed renames</CardDescription>
-                <CardTitle className="text-3xl">{report.summary.normalized}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-[var(--muted-foreground)]">
-                Messy bank text cleaned up
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Duplicate merges</CardDescription>
-                <CardTitle className="text-3xl">{report.summary.merged}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-[var(--muted-foreground)]">
-                Same merchant, multiple aliases
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Junk deletes</CardDescription>
-                <CardTitle className="text-3xl">{report.summary.deleted}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-[var(--muted-foreground)]">
-                Payment refs / pure noise
-              </CardContent>
-            </Card>
-          </div>
-
           {(report.protectedCount ?? 0) > 0 ? (
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <div className="flex items-center gap-2 rounded-lg border px-4 py-3 text-sm text-[var(--muted-foreground)]">
               <ShieldCheck className="h-4 w-4" />
-              {report.protectedCount} aliases were skipped because you protected them in a previous
-              cleanup run.
+              {report.protectedCount} aliases skipped (protected from earlier runs).
             </div>
           ) : null}
 
           {step === 'done' ? (
             <Card>
               <CardHeader>
-                <CardTitle>Cleanup complete</CardTitle>
-                <CardDescription>
-                  {report.learnedCount
-                    ? `${report.learnedCount} alias${report.learnedCount === 1 ? '' : 'es'} added to the protected list for future scans.`
-                    : 'All proposed changes from the latest scan have been handled.'}
-                </CardDescription>
+                <CardTitle>All done</CardTitle>
+                <CardDescription>No more proposed changes from the latest scan.</CardDescription>
               </CardHeader>
             </Card>
           ) : null}
@@ -594,63 +450,24 @@ export function AliasCleanupWorkspace() {
           {step === 'review' ? (
             <Card>
               <CardHeader>
-                <CardTitle>Review proposed changes</CardTitle>
+                <CardTitle>Fix aliases</CardTitle>
                 <CardDescription>
-                  Change the Action column when the system is wrong. Pick Rename to type your own
-                  name. Use bulk buttons to set Remove or Rename on all selected rows at once.
+                  {report.summary.normalized} renames, {report.summary.merged} duplicates,{' '}
+                  {report.summary.deleted} junk — {changes.length} total to review.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{selectedChanges.length} selected</Badge>
-                  {actionCounts.delete > 0 ? (
-                    <Badge variant="destructive">{actionCounts.delete} remove</Badge>
-                  ) : null}
-                  {actionCounts.rename > 0 ? (
-                    <Badge variant="outline">{actionCounts.rename} rename</Badge>
-                  ) : null}
-                  {actionCounts.merge > 0 ? (
-                    <Badge variant="outline">{actionCounts.merge} merge</Badge>
-                  ) : null}
-                  {actionCounts.keep > 0 ? (
-                    <Badge variant="outline">{actionCounts.keep} keep</Badge>
-                  ) : null}
-                  <Badge variant="outline">{filteredChanges.length} matching filter</Badge>
-                  {search.trim() ? (
-                    <Badge variant="outline">
-                      {filteredSelectedCount} selected in &quot;{search.trim()}&quot;
-                    </Badge>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="relative min-w-[260px] flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-                    <Input
-                      value={search}
-                      onChange={(event) => {
-                        setSearch(event.target.value);
-                        setPage(0);
-                      }}
-                      placeholder="Search merchant or alias, e.g. GROWW"
-                      className="pl-9"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(Object.keys(FILTER_LABELS) as CleanupFilter[]).map((key) => (
-                      <Button
-                        key={key}
-                        size="sm"
-                        variant={filter === key ? 'default' : 'outline'}
-                        onClick={() => {
-                          setFilter(key);
-                          setPage(0);
-                        }}
-                      >
-                        {FILTER_LABELS[key]}
-                      </Button>
-                    ))}
-                  </div>
+                <div className="relative max-w-md">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+                  <Input
+                    value={search}
+                    onChange={(event) => {
+                      setSearch(event.target.value);
+                      setPage(0);
+                    }}
+                    placeholder="Search e.g. GROWW or Amazon"
+                    className="pl-9"
+                  />
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -660,7 +477,7 @@ export function AliasCleanupWorkspace() {
                     disabled={filteredChanges.length === 0}
                     onClick={() => setSelectionForActions(filteredChanges, true)}
                   >
-                    Select all {filteredChanges.length} filtered
+                    Select all {filteredChanges.length} shown
                   </Button>
                   <Button
                     size="sm"
@@ -668,41 +485,88 @@ export function AliasCleanupWorkspace() {
                     disabled={filteredChanges.length === 0}
                     onClick={() => setSelectionForActions(filteredChanges, false)}
                   >
-                    Clear filtered
+                    Clear selection
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={pageItems.length === 0}
-                    onClick={togglePageSelection}
-                  >
-                    {allPageSelected ? 'Clear page' : `Select page (${pageItems.length})`}
+                  <Button size="sm" variant="outline" onClick={togglePageSelection}>
+                    {allPageSelected ? 'Clear this page' : 'Select this page'}
                   </Button>
+                  <span className="self-center text-sm text-[var(--muted-foreground)]">
+                    {selectedChanges.length} selected
+                  </span>
                 </div>
 
-                <div className="rounded-lg border bg-muted/30 p-3">
-                  <p className="mb-2 text-sm font-medium">Bulk set action</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-[var(--muted-foreground)]">
-                      Selected ({selectedChanges.length}) or filtered ({filteredChanges.length}):
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={selectedChanges.length === 0}
-                      onClick={() => setBulkAction(selectedChanges, 'delete')}
-                    >
-                      Remove
-                    </Button>
+                <div className="rounded-lg border p-4 space-y-3">
+                  <p className="text-sm font-medium">Bulk action for selected rows</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-[var(--muted-foreground)]">
+                        Link to merchant
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={merchantSearch}
+                          onChange={(event) => setMerchantSearch(event.target.value)}
+                          placeholder="Search merchant e.g. Amazon"
+                          className="w-48 text-sm"
+                        />
+                        <select
+                          className="rounded-md border bg-background px-2 py-2 text-sm min-w-[160px]"
+                          value={bulkMerchantId}
+                          onChange={(event) => setBulkMerchantId(event.target.value)}
+                        >
+                          <option value="">Pick merchant…</option>
+                          {merchants.map((merchant) => (
+                            <option key={merchant.id} value={merchant.id}>
+                              {merchant.canonicalName}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={selectedChanges.length === 0 || !bulkMerchantId}
+                          onClick={() =>
+                            setBulkAction(selectedChanges, 'link', {
+                              linkToMerchantId: bulkMerchantId,
+                            })
+                          }
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-[var(--muted-foreground)]">Rename to</label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={bulkRenameValue}
+                          onChange={(event) => setBulkRenameValue(event.target.value)}
+                          placeholder="New alias name"
+                          className="w-48 text-sm"
+                        />
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={selectedChanges.length === 0 || !bulkRenameValue.trim()}
+                          onClick={() =>
+                            setBulkAction(selectedChanges, 'rename', {
+                              renameTo: bulkRenameValue.trim(),
+                            })
+                          }
+                        >
+                          Apply
+                        </Button>
+                      </div>
+                    </div>
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={selectedChanges.length === 0}
-                      onClick={() =>
-                        setBulkAction(selectedChanges, 'rename', { useMerchantName: true })
-                      }
+                      onClick={() => setBulkAction(selectedChanges, 'delete')}
                     >
-                      Rename to merchant name
+                      Delete selected aliases
                     </Button>
                     <Button
                       size="sm"
@@ -710,109 +574,60 @@ export function AliasCleanupWorkspace() {
                       disabled={selectedChanges.length === 0}
                       onClick={() => setBulkAction(selectedChanges, 'keep')}
                     >
-                      Keep original
+                      Keep selected unchanged
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
                       disabled={selectedChanges.length === 0}
-                      onClick={() => resetActionsToSystem(selectedChanges)}
+                      onClick={() => setBulkAction(selectedChanges, 'system')}
                     >
-                      Reset to system
-                    </Button>
-                    <span className="mx-1 text-xs text-[var(--muted-foreground)]">|</span>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      disabled={filteredChanges.length === 0}
-                      onClick={() => setBulkAction(filteredChanges, 'delete')}
-                    >
-                      Filtered → Remove
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={filteredChanges.length === 0}
-                      onClick={() =>
-                        setBulkAction(filteredChanges, 'rename', { useMerchantName: true })
-                      }
-                    >
-                      Filtered → Rename to merchant name
-                    </Button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Input
-                      value={bulkRenameValue}
-                      onChange={(event) => setBulkRenameValue(event.target.value)}
-                      placeholder="Same name for all selected, e.g. Groww"
-                      className="max-w-xs font-mono text-xs"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={selectedChanges.length === 0 || !bulkRenameValue.trim()}
-                      onClick={() => applyBulkRenameValue(selectedChanges)}
-                    >
-                      Rename selected to this
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={filteredChanges.length === 0 || !bulkRenameValue.trim()}
-                      onClick={() => applyBulkRenameValue(filteredChanges)}
-                    >
-                      Rename filtered to this
+                      Use system suggestion
                     </Button>
                   </div>
                 </div>
 
-                <div className="rounded-lg border">
+                <div className="rounded-lg border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">
                           <input
                             type="checkbox"
-                            aria-label="Select all rows on this page"
+                            aria-label="Select all on page"
                             checked={allPageSelected}
                             onChange={togglePageSelection}
                           />
                         </TableHead>
-                        <TableHead>Merchant</TableHead>
-                        <TableHead className="w-[120px]">Action</TableHead>
-                        <TableHead>Current alias</TableHead>
-                        <TableHead>New alias</TableHead>
-                        <TableHead className="text-[var(--muted-foreground)]">System</TableHead>
-                        <TableHead>Why</TableHead>
+                        <TableHead>Current merchant</TableHead>
+                        <TableHead>Alias text</TableHead>
+                        <TableHead className="w-[180px]">What to do</TableHead>
+                        <TableHead>Details</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pageItems.length === 0 ? (
                         <TableRow>
-                          <TableCell
-                            colSpan={7}
-                            className="py-10 text-center text-[var(--muted-foreground)]"
-                          >
-                            No rows match this filter.
+                          <TableCell colSpan={5} className="py-10 text-center text-[var(--muted-foreground)]">
+                            No matches.
                           </TableCell>
                         </TableRow>
                       ) : (
                         pageItems.map((action) => {
                           const id = actionId(action);
                           const state = rowStates[id] ?? createRowState(action);
-                          const choices = availableActionChoices(action);
-                          const systemDefault = defaultActionChoice(action);
-                          const isOverridden = state.actionChoice !== systemDefault;
+                          const linkedName = state.linkToMerchantId
+                            ? merchantNameById.get(state.linkToMerchantId)
+                            : undefined;
 
                           return (
                             <TableRow
                               key={id}
-                              className={state.selected ? 'bg-emerald-50/40' : undefined}
+                              className={state.selected ? 'bg-muted/30' : undefined}
                             >
                               <TableCell>
                                 <input
                                   type="checkbox"
-                                  aria-label={`Select ${action.merchantName ?? 'merchant'} change`}
                                   checked={state.selected}
                                   onChange={(event) =>
                                     updateRow(id, { selected: event.target.checked })
@@ -820,36 +635,60 @@ export function AliasCleanupWorkspace() {
                                 />
                               </TableCell>
                               <TableCell className="font-medium">
-                                {action.merchantName ?? 'Unknown merchant'}
+                                {action.merchantName ?? 'Unknown'}
+                              </TableCell>
+                              <TableCell className="max-w-[320px] break-all font-mono text-xs">
+                                {action.rawName}
                               </TableCell>
                               <TableCell>
                                 <select
                                   className="w-full rounded-md border bg-background px-2 py-1 text-sm"
-                                  value={state.actionChoice}
-                                  onChange={(event) => {
-                                    const nextChoice = event.target.value as RowActionChoice;
+                                  value={state.action}
+                                  onChange={(event) =>
                                     updateRow(id, {
                                       selected: true,
-                                      actionChoice: nextChoice,
-                                      renameTo:
-                                        nextChoice === 'rename' && !state.renameTo.trim()
-                                          ? defaultRenameTo(action)
-                                          : state.renameTo,
-                                    });
-                                  }}
+                                      action: event.target.value as RowAction,
+                                    })
+                                  }
                                 >
-                                  {choices.map((choice) => (
-                                    <option key={choice} value={choice}>
-                                      {ACTION_LABELS[choice]}
+                                  {ACTION_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
                                     </option>
                                   ))}
                                 </select>
                               </TableCell>
-                              <TableCell className="max-w-[240px] break-all font-mono text-xs">
-                                {action.rawName}
-                              </TableCell>
-                              <TableCell className="max-w-[200px]">
-                                {state.actionChoice === 'rename' ? (
+                              <TableCell className="text-sm">
+                                {state.action === 'system' ? (
+                                  <span className="text-[var(--muted-foreground)]">
+                                    {systemSuggestionText(action)}
+                                  </span>
+                                ) : null}
+                                {state.action === 'link' ? (
+                                  <select
+                                    className="w-full max-w-[220px] rounded-md border bg-background px-2 py-1 text-sm"
+                                    value={state.linkToMerchantId}
+                                    onChange={(event) =>
+                                      updateRow(id, {
+                                        selected: true,
+                                        linkToMerchantId: event.target.value,
+                                      })
+                                    }
+                                  >
+                                    <option value="">Pick merchant…</option>
+                                    {merchants.map((merchant) => (
+                                      <option key={merchant.id} value={merchant.id}>
+                                        {merchant.canonicalName}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : null}
+                                {state.action === 'link' && linkedName ? (
+                                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                                    Will link to {linkedName}
+                                  </p>
+                                ) : null}
+                                {state.action === 'rename' ? (
                                   <Input
                                     value={state.renameTo}
                                     onChange={(event) =>
@@ -858,36 +697,20 @@ export function AliasCleanupWorkspace() {
                                         renameTo: event.target.value,
                                       })
                                     }
-                                    className="font-mono text-xs"
-                                    placeholder="Type alias name"
+                                    className="mt-1 font-mono text-xs"
+                                    placeholder="New name"
                                   />
-                                ) : (
-                                  <span
-                                    className={`break-all font-mono text-xs ${
-                                      state.actionChoice === 'delete'
-                                        ? 'text-red-700'
-                                        : 'text-[var(--muted-foreground)]'
-                                    }`}
-                                  >
-                                    {resultPreview(action, state)}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="max-w-[140px] break-all font-mono text-xs text-[var(--muted-foreground)]">
-                                <div>{systemActionLabel(action)}</div>
-                                <div className="mt-0.5">
-                                  {action.type === 'delete'
-                                    ? '— remove —'
-                                    : (action.sanitizedName ?? '—')}
-                                </div>
-                                {isOverridden ? (
-                                  <Badge variant="outline" className="mt-1 text-[10px]">
-                                    overridden
-                                  </Badge>
                                 ) : null}
-                              </TableCell>
-                              <TableCell className="max-w-[180px] text-xs text-[var(--muted-foreground)]">
-                                {reasonText(action)}
+                                {state.action === 'delete' ? (
+                                  <span className="text-[var(--muted-foreground)]">
+                                    Alias will be deleted
+                                  </span>
+                                ) : null}
+                                {state.action === 'keep' ? (
+                                  <span className="text-[var(--muted-foreground)]">
+                                    No change
+                                  </span>
+                                ) : null}
                               </TableCell>
                             </TableRow>
                           );
@@ -899,10 +722,9 @@ export function AliasCleanupWorkspace() {
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm text-[var(--muted-foreground)]">
-                    Showing {pageItems.length} of {filteredChanges.length} filtered rows · page{' '}
-                    {currentPage + 1} of {pageCount}
+                    Page {currentPage + 1} of {pageCount} · {filteredChanges.length} rows
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
