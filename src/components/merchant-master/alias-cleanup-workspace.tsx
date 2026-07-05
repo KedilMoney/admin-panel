@@ -109,6 +109,14 @@ function createRowState(action: MerchantAliasCleanupAction): RowState {
 }
 
 function formatSubmitError(error: unknown): string {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as {
+      response?: { data?: { message?: string; error?: string } };
+      message?: string;
+    };
+    const apiMessage = axiosError.response?.data?.message ?? axiosError.response?.data?.error;
+    if (apiMessage) return apiMessage;
+  }
   if (error instanceof Error) return error.message;
   return 'Unable to run alias cleanup.';
 }
@@ -122,11 +130,7 @@ function buildCorrections(
   for (const action of changes) {
     const id = actionId(action);
     const state = rowStates[id] ?? createRowState(action);
-
-    if (!state.selected) {
-      corrections.push({ aliasId: id, decision: 'skip' });
-      continue;
-    }
+    if (!state.selected) continue;
 
     if (state.actionChoice === 'keep') {
       corrections.push({ aliasId: id, decision: 'keep_original', remember: true });
@@ -134,13 +138,16 @@ function buildCorrections(
     }
 
     if (state.actionChoice === 'delete') {
-      if (action.type !== 'delete') {
+      if (action.type === 'delete') {
+        corrections.push({ aliasId: id, decision: 'accept' });
+      } else {
         corrections.push({ aliasId: id, decision: 'force_delete' });
       }
       continue;
     }
 
     if (state.actionChoice === 'merge') {
+      corrections.push({ aliasId: id, decision: 'accept' });
       continue;
     }
 
@@ -149,8 +156,11 @@ function buildCorrections(
       if (!customName) continue;
       const systemName = defaultRenameTo(action);
       const systemChoice = defaultActionChoice(action);
-      if (systemChoice === 'rename' && customName === systemName) continue;
-      corrections.push({ aliasId: id, decision: 'custom_name', customName });
+      if (systemChoice === 'rename' && customName === systemName) {
+        corrections.push({ aliasId: id, decision: 'accept' });
+      } else {
+        corrections.push({ aliasId: id, decision: 'custom_name', customName });
+      }
     }
   }
 

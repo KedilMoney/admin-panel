@@ -158,7 +158,8 @@ export const merchantProfilesApi = {
         apply,
         skipAliasIds: options.skipAliasIds ?? [],
         corrections: options.corrections ?? [],
-      }
+      },
+      apply ? { timeout: 120_000 } : undefined
     );
     return response.data.data;
   },
