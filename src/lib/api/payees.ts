@@ -10,11 +10,17 @@ export interface Payee {
 }
 
 export const payeesApi = {
-  getAll: async (search?: string, page?: number, limit?: number): Promise<{ payees: Payee[]; pagination: any }> => {
+  getAll: async (
+    search?: string,
+    page?: number,
+    limit?: number,
+    excludeAccountPayees = true
+  ): Promise<{ payees: Payee[]; pagination: any }> => {
     const queryParams = new URLSearchParams();
     if (search) queryParams.append('search', search);
     if (page) queryParams.append('page', page.toString());
     if (limit) queryParams.append('limit', limit.toString());
+    if (excludeAccountPayees) queryParams.append('excludeAccountPayees', 'true');
 
     const response = await api.get<{ payees: Payee[]; pagination: any }>(
       `/api/payees${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
