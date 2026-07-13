@@ -328,3 +328,53 @@ export interface MerchantAliasCleanupResult {
   };
 }
 
+export type EnricherDomain = 'merchant' | 'category' | 'tag';
+
+export interface EnricherSuggestion {
+  suggestionId: string;
+  domain: EnricherDomain;
+  merchantProfileId: string;
+  aliasId: string | null;
+  rawDescriptor: string;
+  currentValue: string;
+  suggestedValue: string;
+  suggestedTag: string | null;
+  confidence: number;
+  reasoning: string;
+  issues: string[];
+  profileConfidence: number;
+  currentMerchant: string;
+  currentCategory: string;
+  currentTags: string[];
+  source: 'llm' | 'extractor';
+}
+
+export interface EnricherScanResult {
+  domain: EnricherDomain;
+  summary: {
+    scanned: number;
+    suggested: number;
+    skipped: number;
+    llmUsed: boolean;
+  };
+  suggestions: EnricherSuggestion[];
+}
+
+export interface EnricherApplyDecision {
+  suggestionId: string;
+  action: 'accept' | 'skip' | 'custom';
+  customValue?: string;
+}
+
+export interface EnricherApplyResult {
+  domain: EnricherDomain;
+  applied: number;
+  skipped: number;
+  errors: Array<{ suggestionId: string; message: string }>;
+  transactionSync?: {
+    categoriesUpdated: number;
+    displayUpdated: number;
+    tagsRefreshed: number;
+  };
+}
+

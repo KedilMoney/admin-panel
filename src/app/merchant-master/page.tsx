@@ -180,17 +180,17 @@ export default function MerchantMasterPage() {
   };
 
   const cleanupMaintenancePanel = (
-    <section className="mm-maintenance" aria-label="Merchant alias cleanup">
+    <section className="mm-maintenance" aria-label="Enricher">
       <div>
-        <div className="mm-maintenance__title">Alias cleanup</div>
+        <div className="mm-maintenance__title">Enricher</div>
         <div className="mm-maintenance__copy">
-          Review noisy bank-statement aliases in a full-page workspace with per-row corrections
-          and protected-alias learning.
+          LLM-backed workspace to improve merchant names, categories, and tags with human review
+          before applying fixes to user data.
         </div>
       </div>
       <div className="mm-maintenance__actions">
-        <Link href="/merchant-master/alias-cleanup" className="mm-btn mm-btn--dark">
-          Open cleanup workspace
+        <Link href="/enricher?tab=merchant" className="mm-btn mm-btn--dark">
+          Open Enricher
         </Link>
       </div>
     </section>

@@ -18,7 +18,7 @@ import {
   FlaskConical,
   UserCheck,
   GraduationCap,
-  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -29,7 +29,7 @@ const navigation = [
   { name: 'Bank Master', href: '/bank-master', icon: Building2 },
   { name: 'Payees', href: '/payees', icon: UserCheck },
   { name: 'Merchant Profiles', href: '/merchant-master', icon: Store },
-  { name: 'Alias Cleanup', href: '/merchant-master/alias-cleanup', icon: ShieldCheck },
+  { name: 'Enricher', href: '/enricher', icon: Sparkles },
   { name: 'Category Tags', href: '/category-tags', icon: Tags },
   { name: 'Auto-Cat Lab', href: '/auto-cat-lab', icon: FlaskConical },
   { name: 'Groups', href: '/groups', icon: FolderKanban },
