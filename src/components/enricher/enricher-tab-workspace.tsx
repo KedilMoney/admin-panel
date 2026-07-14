@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Loader2,
@@ -21,8 +21,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { useEnricherApply, useEnricherScan } from '@/lib/hooks/useEnricher';
-import type { EnricherDomain, EnricherScanResult, EnricherSuggestion } from '@/types';
+import { useEnricherApply, useEnricherLatest, useEnricherScan } from '@/lib/hooks/useEnricher';
+import type { EnricherDomain, EnricherScanResult, EnricherSuggestion, StoredEnricherScan } from '@/types';
 
 type RowState = {
   selected: boolean;
@@ -88,17 +88,46 @@ function formatSubmitError(error: unknown): string {
   return 'Request failed';
 }
 
+function formatScannedAt(value: string): string {
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
+function hydrateFromStored(stored: StoredEnricherScan) {
+  const nextStates: Record<string, RowState> = {};
+  for (const row of stored.result.suggestions) {
+    nextStates[row.suggestionId] = createRowState(row);
+  }
+  return nextStates;
+}
+
 export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
   const copy = DOMAIN_COPY[domain];
+  const latest = useEnricherLatest(domain);
   const scan = useEnricherScan();
   const apply = useEnricherApply();
 
   const [report, setReport] = useState<EnricherScanResult | null>(null);
+  const [scanMeta, setScanMeta] = useState<Pick<StoredEnricherScan, 'scannedAt' | 'trigger' | 'error'> | null>(null);
   const [rowStates, setRowStates] = useState<Record<string, RowState>>({});
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!latest.data) return;
+    setReport(latest.data.result);
+    setScanMeta({
+      scannedAt: latest.data.scannedAt,
+      trigger: latest.data.trigger,
+      error: latest.data.error,
+    });
+    setRowStates(hydrateFromStored(latest.data));
+  }, [latest.data]);
 
   const suggestions = report?.suggestions ?? [];
 
@@ -129,25 +158,29 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
 
   const resetWorkspace = () => {
     setReport(null);
+    setScanMeta(null);
     setRowStates({});
     setSearch('');
     setPage(0);
     setError(null);
     setSuccessMessage(null);
+    latest.refetch();
   };
 
   const runScan = async () => {
     setError(null);
     setSuccessMessage(null);
     try {
-      const nextReport = await scan.mutateAsync({ domain, limit: 60 });
-      setReport(nextReport);
-      const nextStates: Record<string, RowState> = {};
-      for (const row of nextReport.suggestions) {
-        nextStates[row.suggestionId] = createRowState(row);
-      }
-      setRowStates(nextStates);
+      const stored = await scan.mutateAsync({ domain });
+      setReport(stored.result);
+      setScanMeta({
+        scannedAt: stored.scannedAt,
+        trigger: stored.trigger,
+        error: stored.error,
+      });
+      setRowStates(hydrateFromStored(stored));
       setPage(0);
+      await latest.refetch();
     } catch (err) {
       setError(formatSubmitError(err));
     }
@@ -186,7 +219,7 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
       if (result.errors.length > 0) {
         setError(result.errors.map((row) => `${row.suggestionId}: ${row.message}`).join(' '));
       }
-      await runScan();
+      await latest.refetch();
     } catch (err) {
       setError(formatSubmitError(err));
     }
@@ -202,7 +235,7 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
     }));
   };
 
-  const isPending = scan.isPending || apply.isPending;
+  const isPending = scan.isPending || apply.isPending || latest.isLoading;
 
   return (
     <div className="space-y-6">
@@ -212,6 +245,16 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
           <p className="mt-1 max-w-2xl text-sm text-[var(--muted-foreground)]">
             {copy.description}
           </p>
+          <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+            Nightly scan runs automatically at 11:00 PM IST. Use Run scan only when you need a
+            fresh pass.
+          </p>
+          {scanMeta ? (
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              Last scan: {formatScannedAt(scanMeta.scannedAt)} ({scanMeta.trigger})
+              {scanMeta.error ? ` · last error: ${scanMeta.error}` : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           {report ? (
@@ -226,7 +269,7 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
             ) : (
               <Play className="mr-2 h-4 w-4" />
             )}
-            Run scan
+            Run scan now
           </Button>
           {report ? (
             <Button
@@ -451,13 +494,22 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
             )}
           </CardContent>
         </Card>
+      ) : latest.isLoading ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Loading latest scan…</CardTitle>
+            <CardDescription>
+              Showing the most recent nightly or manual scan when available.
+            </CardDescription>
+          </CardHeader>
+        </Card>
       ) : (
         <Card>
           <CardHeader>
             <CardTitle>Ready to scan</CardTitle>
             <CardDescription>
-              Run a job to find messy {domain} data and get LLM-backed suggestions. Review and
-              apply only what looks correct — fixes propagate to linked user transactions.
+              No saved scan yet for this tab. The nightly job runs at 11:00 PM IST, or use Run
+              scan now for an on-demand refresh.
             </CardDescription>
           </CardHeader>
         </Card>

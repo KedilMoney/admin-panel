@@ -3,25 +3,36 @@ import type {
   EnricherApplyDecision,
   EnricherApplyResult,
   EnricherDomain,
-  EnricherScanResult,
-  EnricherSuggestion,
+  StoredEnricherScan,
 } from '@/types';
 
+const ENRICHER_TIMEOUT_MS = 180_000;
+
 export const enricherApi = {
-  scan: async (domain: EnricherDomain, limit?: number): Promise<EnricherScanResult> => {
-    const response = await api.post<EnricherScanResult>('/api/admin/enricher/scan', {
-      domain,
-      limit,
-    });
+  getLatest: async (domain: EnricherDomain): Promise<StoredEnricherScan | null> => {
+    const response = await api.get<StoredEnricherScan | null>(
+      `/api/admin/enricher/latest?domain=${encodeURIComponent(domain)}`
+    );
+    return response.data.data;
+  },
+
+  scan: async (domain: EnricherDomain, limit?: number): Promise<StoredEnricherScan> => {
+    const response = await api.post<StoredEnricherScan>(
+      '/api/admin/enricher/scan',
+      { domain, limit },
+      { timeout: ENRICHER_TIMEOUT_MS }
+    );
     return response.data.data;
   },
 
   apply: async (args: {
     domain: EnricherDomain;
-    suggestions: EnricherSuggestion[];
+    suggestions: StoredEnricherScan['result']['suggestions'];
     decisions: EnricherApplyDecision[];
   }): Promise<EnricherApplyResult> => {
-    const response = await api.post<EnricherApplyResult>('/api/admin/enricher/apply', args);
+    const response = await api.post<EnricherApplyResult>('/api/admin/enricher/apply', args, {
+      timeout: ENRICHER_TIMEOUT_MS,
+    });
     return response.data.data;
   },
 };

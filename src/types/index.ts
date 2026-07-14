@@ -360,6 +360,13 @@ export interface EnricherScanResult {
   suggestions: EnricherSuggestion[];
 }
 
+export interface StoredEnricherScan {
+  result: EnricherScanResult;
+  scannedAt: string;
+  trigger: 'cron' | 'manual';
+  error: string | null;
+}
+
 export interface EnricherApplyDecision {
   suggestionId: string;
   action: 'accept' | 'skip' | 'custom';
