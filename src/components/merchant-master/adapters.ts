@@ -19,6 +19,7 @@ export function toHandoffMerchant(api: ApiProfile): UiProfile {
     tags,
     seenCount: api.seenCount,
     confidence: api.confidence,
+    identityScore: api.identityScore ?? 1,
     verificationLevel: api.verificationLevel as UiProfile['verificationLevel'],
     createdAt: formatDateTime(api.createdAt),
     updatedAt: formatDateTime(api.updatedAt),
@@ -50,15 +51,8 @@ export function computeStats(merchants: ApiProfile[]): MerchantMasterStats {
 
   return {
     totalProfiles: uiMerchants.length,
-    needsReview: uiMerchants.filter(
-      (merchant) =>
-        merchant.confidence < 0.6 ||
-        merchant.verificationLevel === 'llm_low' ||
-        merchant.verificationLevel === 'llm_medium'
-    ).length,
-    userConfirmed: uiMerchants.filter((merchant) =>
-      ['user_confirmed', 'multi_user_confirmed'].includes(merchant.verificationLevel)
-    ).length,
+    needsReview: uiMerchants.filter((merchant) => merchant.identityScore <= 2).length,
+    userConfirmed: uiMerchants.filter((merchant) => merchant.identityScore >= 3).length,
     withIdentifiers: uiMerchants.filter(
       (merchant) => Boolean(merchant.upiId) || merchant.identifiers.length > 0
     ).length,
@@ -82,6 +76,7 @@ export function toBatchSavePayload(snapshot: EditorSnapshot): MerchantProfileBat
     upiId: merchant.upiId.trim() || null,
     accountNumber: merchant.accountNumber.trim() || null,
     confidence: merchant.confidence,
+    identityScore: merchant.identityScore,
     verificationLevel: merchant.verificationLevel,
     type: merchant.type,
     tags: merchant.tags,

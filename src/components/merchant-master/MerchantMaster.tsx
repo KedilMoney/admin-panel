@@ -5,8 +5,8 @@ import { GitMerge, Plus, Search } from 'lucide-react';
 import type { SystemCategoryOption } from '@/types';
 import { MerchantDrawer, MerchantProfilePanel } from './MerchantDetail';
 import {
-  VERIFICATION_LEVELS,
-  VERIFICATION_META,
+  IDENTITY_SCORE_META,
+  IDENTITY_SCORES,
   confidenceTone,
   initials,
   primaryIdentifier,
@@ -118,16 +118,9 @@ export default function MerchantMaster({
           .toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (trust !== 'all' && m.verificationLevel !== trust) return false;
+      if (trust !== 'all' && String(m.identityScore) !== trust) return false;
       if (category !== 'all' && m.systemCategoryId !== category) return false;
-      if (
-        quick === 'review' &&
-        !(
-          m.confidence < 0.6 ||
-          m.verificationLevel === 'llm_low' ||
-          m.verificationLevel === 'llm_medium'
-        )
-      ) {
+      if (quick === 'review' && m.identityScore > 2) {
         return false;
       }
       if (quick === 'noid' && !(!m.upiId && m.identifiers.length === 0)) return false;
@@ -424,10 +417,10 @@ function TableWorkspace(props: {
         <div className="mm-toolbar__count">{filtered.length} profiles</div>
         <div className="mm-spacer" />
         <select className="mm-select" value={trust} onChange={(e) => setTrust(e.target.value)}>
-          <option value="all">All trust levels</option>
-          {VERIFICATION_LEVELS.map((v) => (
-            <option key={v} value={v}>
-              {VERIFICATION_META[v].label}
+          <option value="all">All identity scores</option>
+          {IDENTITY_SCORES.map((score) => (
+            <option key={score} value={String(score)}>
+              {IDENTITY_SCORE_META[score].label}
             </option>
           ))}
         </select>
@@ -485,13 +478,14 @@ function TableWorkspace(props: {
           <div className="mm-th mm-th--right">Aliases</div>
           <div className="mm-th mm-th--right">Txns</div>
           <div className="mm-th">Confidence</div>
-          <div className="mm-th">Trust</div>
+          <div className="mm-th">Identity</div>
           <div className="mm-th mm-th--right">Updated</div>
         </div>
 
         {filtered.map((m) => {
           const p = primaryIdentifier(m);
-          const v = VERIFICATION_META[m.verificationLevel];
+          const score = Math.min(5, Math.max(1, m.identityScore || 1)) as 1 | 2 | 3 | 4 | 5;
+          const v = IDENTITY_SCORE_META[score];
           const av = avatarTone(m.id);
           const selected = drawerOpen && selectedId === m.id;
           const checkedForMerge = bulkMergeIds.includes(m.id);
@@ -610,17 +604,18 @@ function SplitWorkspace(props: {
             value={trust}
             onChange={(e) => setTrust(e.target.value)}
           >
-            <option value="all">All trust levels</option>
-            {VERIFICATION_LEVELS.map((v) => (
-              <option key={v} value={v}>
-                {VERIFICATION_META[v].label}
+            <option value="all">All identity scores</option>
+            {IDENTITY_SCORES.map((score) => (
+              <option key={score} value={String(score)}>
+                {IDENTITY_SCORE_META[score].label}
               </option>
             ))}
           </select>
         </div>
         <div className="mm-list__scroll">
           {filtered.map((m) => {
-            const v = VERIFICATION_META[m.verificationLevel];
+            const score = Math.min(5, Math.max(1, m.identityScore || 1)) as 1 | 2 | 3 | 4 | 5;
+            const v = IDENTITY_SCORE_META[score];
             const av = avatarTone(m.id);
             return (
               <div

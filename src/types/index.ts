@@ -248,6 +248,8 @@ export interface MerchantProfile {
   type: string;
   tags?: MerchantTag[] | unknown;
   confidence: number;
+  /** KED-1110: merchant identity trust 1–5 */
+  identityScore?: number;
   verificationLevel: string;
   seenCount: number;
   createdAt: string;

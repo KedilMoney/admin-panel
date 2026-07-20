@@ -5,6 +5,7 @@ import { Plus, Trash2, X } from 'lucide-react';
 import type { SystemCategoryOption } from '@/types';
 import {
   TYPES,
+  IDENTITY_SCORE_META,
   VERIFICATION_LEVELS,
   VERIFICATION_META,
   confidenceTone,
@@ -144,7 +145,31 @@ function CoreFields({
       </div>
 
       <label className="mm-field">
-        <span className="mm-label">Verification level</span>
+        <span className="mm-label">Identity score (1–5)</span>
+        <select
+          className="mm-select"
+          style={{ width: '100%' }}
+          value={m.identityScore}
+          onChange={(e) => editor.setField('identityScore', Number(e.target.value))}
+        >
+          {[1, 2, 3, 4, 5].map((score) => (
+            <option key={score} value={score}>
+              {score === 1
+                ? '1 · Guess'
+                : score === 2
+                  ? '2 · Weak business'
+                  : score === 3
+                    ? '3 · User-approved name'
+                    : score === 4
+                      ? '4 · Strong reused'
+                      : '5 · Known brand'}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="mm-field">
+        <span className="mm-label">Verification level (legacy)</span>
         <select
           className="mm-select"
           style={{ width: '100%' }}
@@ -483,7 +508,8 @@ export function MerchantDrawer({
   onSignalsRetry,
 }: DetailPanelProps & { onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
-  const v = VERIFICATION_META[merchant.verificationLevel];
+  const score = Math.min(5, Math.max(1, merchant.identityScore || 1)) as 1 | 2 | 3 | 4 | 5;
+  const identityMeta = IDENTITY_SCORE_META[score];
 
   useEffect(() => {
     if (tab === 'signals') {
@@ -507,9 +533,9 @@ export function MerchantDrawer({
             <div style={{ minWidth: 0 }}>
               <div className="mm-drawer__title">{merchant.canonicalName}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                <span className={`mm-chip mm-tone--${v.tone}`}>
+                <span className={`mm-chip mm-tone--${identityMeta.tone}`}>
                   <span className="mm-dot" />
-                  {v.label}
+                  {identityMeta.label}
                 </span>
                 <span className="mm-sub">
                   {merchant.transactionCount} txns · {merchant.seenCount}× seen
@@ -584,7 +610,8 @@ export function MerchantProfilePanel({
   signalsError,
   onSignalsRetry,
 }: DetailPanelProps) {
-  const v = VERIFICATION_META[merchant.verificationLevel];
+  const score = Math.min(5, Math.max(1, merchant.identityScore || 1)) as 1 | 2 | 3 | 4 | 5;
+  const identityMeta = IDENTITY_SCORE_META[score];
   const av = avatarTone(merchant.id);
 
   useEffect(() => {
@@ -602,9 +629,9 @@ export function MerchantProfilePanel({
             {merchant.canonicalName}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-            <span className={`mm-chip mm-tone--${v.tone}`}>
+            <span className={`mm-chip mm-tone--${identityMeta.tone}`}>
               <span className="mm-dot" />
-              {v.label}
+              {identityMeta.label}
             </span>
             <span className="mm-sub">
               {merchant.category} · {merchant.type} · {merchant.transactionCount} txns · updated{' '}
