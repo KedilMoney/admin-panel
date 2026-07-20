@@ -5,9 +5,9 @@ import { GitMerge, Plus, Search } from 'lucide-react';
 import type { SystemCategoryOption } from '@/types';
 import { MerchantDrawer, MerchantProfilePanel } from './MerchantDetail';
 import {
-  IDENTITY_SCORE_META,
   IDENTITY_SCORES,
-  confidenceTone,
+  identityScoreMeta,
+  normalizeIdentityScore,
   initials,
   primaryIdentifier,
 } from './data';
@@ -38,11 +38,6 @@ export interface MerchantMasterProps {
   saveError?: string;
   maintenancePanel?: ReactNode;
 }
-
-const confColorVar = (c: number) => {
-  const t = confidenceTone(c);
-  return t === 'success' ? 'var(--green-500)' : t === 'warning' ? 'var(--warn-500)' : 'var(--bad-500)';
-};
 
 const avatarTone = (id: string) => {
   const tones = [
@@ -266,11 +261,11 @@ export default function MerchantMaster({
               <div className="mm-stat__value">{stats.totalProfiles}</div>
             </div>
             <div className="mm-stat">
-              <div className="mm-stat__label">Needs review</div>
+              <div className="mm-stat__label">Low identity (1–2)</div>
               <div className="mm-stat__value mm-stat__value--accent">{stats.needsReview}</div>
             </div>
             <div className="mm-stat">
-              <div className="mm-stat__label">User confirmed</div>
+              <div className="mm-stat__label">Trusted (3+)</div>
               <div className="mm-stat__value">{stats.userConfirmed}</div>
             </div>
             <div className="mm-stat">
@@ -408,7 +403,7 @@ function TableWorkspace(props: {
   } = props;
   const cols = {
     display: 'grid',
-    gridTemplateColumns: '44px 2.3fr 1.3fr 1.7fr 0.8fr 0.8fr 1.3fr 1.5fr 1.1fr',
+    gridTemplateColumns: '44px 2.3fr 1.3fr 1.7fr 0.8fr 0.8fr 1.6fr 1.1fr',
   } as const;
 
   return (
@@ -420,7 +415,7 @@ function TableWorkspace(props: {
           <option value="all">All identity scores</option>
           {IDENTITY_SCORES.map((score) => (
             <option key={score} value={String(score)}>
-              {IDENTITY_SCORE_META[score].label}
+              {identityScoreMeta(score).label}
             </option>
           ))}
         </select>
@@ -477,15 +472,14 @@ function TableWorkspace(props: {
           <div className="mm-th">Primary ID</div>
           <div className="mm-th mm-th--right">Aliases</div>
           <div className="mm-th mm-th--right">Txns</div>
-          <div className="mm-th">Confidence</div>
-          <div className="mm-th">Identity</div>
+          <div className="mm-th">Identity score</div>
           <div className="mm-th mm-th--right">Updated</div>
         </div>
 
         {filtered.map((m) => {
           const p = primaryIdentifier(m);
-          const score = Math.min(5, Math.max(1, m.identityScore || 1)) as 1 | 2 | 3 | 4 | 5;
-          const v = IDENTITY_SCORE_META[score];
+          const score = normalizeIdentityScore(m.identityScore);
+          const meta = identityScoreMeta(score);
           const av = avatarTone(m.id);
           const selected = drawerOpen && selectedId === m.id;
           const checkedForMerge = bulkMergeIds.includes(m.id);
@@ -549,22 +543,11 @@ function TableWorkspace(props: {
               >
                 {m.transactionCount}
               </div>
-              <div className="mm-conf">
-                <div className="mm-conf__track">
-                  <div
-                    className="mm-conf__fill"
-                    style={{
-                      width: `${Math.round(m.confidence * 100)}%`,
-                      background: confColorVar(m.confidence),
-                    }}
-                  />
-                </div>
-                <span className="mm-conf__num">{m.confidence.toFixed(2)}</span>
-              </div>
               <div>
-                <span className={`mm-chip mm-tone--${v.tone}`}>
+                <span className={`mm-chip mm-tone--${meta.tone}`} title={meta.label}>
                   <span className="mm-dot" />
-                  {v.label}
+                  <strong>{score}</strong>
+                  <span style={{ marginLeft: 6 }}>{meta.shortLabel}</span>
                 </span>
               </div>
               <div className="mm-cell-right" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
@@ -607,15 +590,15 @@ function SplitWorkspace(props: {
             <option value="all">All identity scores</option>
             {IDENTITY_SCORES.map((score) => (
               <option key={score} value={String(score)}>
-                {IDENTITY_SCORE_META[score].label}
+                {identityScoreMeta(score).label}
               </option>
             ))}
           </select>
         </div>
         <div className="mm-list__scroll">
           {filtered.map((m) => {
-            const score = Math.min(5, Math.max(1, m.identityScore || 1)) as 1 | 2 | 3 | 4 | 5;
-            const v = IDENTITY_SCORE_META[score];
+            const score = normalizeIdentityScore(m.identityScore);
+            const meta = identityScoreMeta(score);
             const av = avatarTone(m.id);
             return (
               <div
@@ -638,27 +621,11 @@ function SplitWorkspace(props: {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 300,
-                      color: confColorVar(m.confidence),
-                      letterSpacing: '-0.02em',
-                    }}
-                    className="mm-num"
-                  >
-                    {m.confidence.toFixed(2)}
-                  </div>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: `var(--${v.tone === 'success' ? 'green-500' : v.tone === 'warning' ? 'warn-500' : v.tone === 'info' ? 'info-500' : 'bad-500'})`,
-                      marginTop: 4,
-                    }}
-                  />
+                  <span className={`mm-chip mm-tone--${meta.tone}`} style={{ fontSize: 11 }}>
+                    <span className="mm-dot" />
+                    <strong>{score}</strong>
+                    <span style={{ marginLeft: 4 }}>{meta.shortLabel}</span>
+                  </span>
                 </div>
               </div>
             );

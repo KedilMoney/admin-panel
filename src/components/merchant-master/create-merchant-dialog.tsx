@@ -18,7 +18,6 @@ type FormState = {
   systemCategoryId: string;
   upiId: string;
   accountNumber: string;
-  confidence: string;
 };
 
 const INITIAL_FORM: FormState = {
@@ -26,7 +25,6 @@ const INITIAL_FORM: FormState = {
   systemCategoryId: '',
   upiId: '',
   accountNumber: '',
-  confidence: '0.95',
 };
 
 const formatSubmitError = (error: unknown) => {
@@ -76,19 +74,12 @@ export function CreateMerchantDialog({
       return;
     }
 
-    const confidence = Number(form.confidence);
-    if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
-      setFormError('Confidence must be between 0 and 1.');
-      return;
-    }
-
     try {
       await createMerchant.mutateAsync({
         canonicalName: form.canonicalName.trim(),
         systemCategoryId: form.systemCategoryId,
         upiId: form.upiId.trim() || null,
         accountNumber: form.accountNumber.trim() || null,
-        confidence,
       });
       onOpenChange(false);
     } catch (submitError: unknown) {
@@ -165,21 +156,6 @@ export function CreateMerchantDialog({
               />
             </label>
           </div>
-
-          <label className="mm-field">
-            <span className="mm-label">Confidence</span>
-            <input
-              className="mm-input"
-              type="number"
-              min="0"
-              max="1"
-              step="0.01"
-              value={form.confidence}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, confidence: event.target.value }))
-              }
-            />
-          </label>
 
           {formError ? (
             <p style={{ fontSize: 13, color: 'var(--bad-text)', margin: 0 }}>{formError}</p>

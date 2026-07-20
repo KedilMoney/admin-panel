@@ -19,25 +19,35 @@ export const VERIFICATION_META: Record<VerificationLevel, { label: string; tone:
 
 export const VERIFICATION_LEVELS = Object.keys(VERIFICATION_META) as VerificationLevel[];
 
-/** KED-1110 identity score labels */
+/** KED-1110 — merchant identity trust (who), not category confidence */
 export const IDENTITY_SCORE_META: Record<
   1 | 2 | 3 | 4 | 5,
-  { label: string; tone: Tone }
+  { label: string; shortLabel: string; tone: Tone }
 > = {
-  1: { label: '1 · Guess', tone: 'danger' },
-  2: { label: '2 · Weak business', tone: 'warning' },
-  3: { label: '3 · User-approved name', tone: 'success' },
-  4: { label: '4 · Strong reused', tone: 'success' },
-  5: { label: '5 · Known brand', tone: 'info' },
+  1: { label: '1 — Guess', shortLabel: 'Guess', tone: 'danger' },
+  2: { label: '2 — Weak business', shortLabel: 'Weak business', tone: 'warning' },
+  3: { label: '3 — User-approved name', shortLabel: 'User-approved', tone: 'success' },
+  4: { label: '4 — Strong reused', shortLabel: 'Strong reused', tone: 'success' },
+  5: { label: '5 — Known brand', shortLabel: 'Known brand', tone: 'info' },
 };
 
 export const IDENTITY_SCORES = [1, 2, 3, 4, 5] as const;
 
+export type IdentityScoreValue = (typeof IDENTITY_SCORES)[number];
+
+export function normalizeIdentityScore(score: number | undefined | null): IdentityScoreValue {
+  const n = Math.round(Number(score));
+  if (!Number.isFinite(n) || n <= 1) return 1;
+  if (n >= 5) return 5;
+  return n as IdentityScoreValue;
+}
+
+export function identityScoreMeta(score: number | undefined | null) {
+  return IDENTITY_SCORE_META[normalizeIdentityScore(score)];
+}
+
 export function identityScoreTone(score: number): Tone {
-  if (score >= 5) return 'info';
-  if (score >= 3) return 'success';
-  if (score >= 2) return 'warning';
-  return 'danger';
+  return identityScoreMeta(score).tone;
 }
 
 export function buildCategoryToType(categories: SystemCategoryOption[]): Record<string, MerchantType> {
