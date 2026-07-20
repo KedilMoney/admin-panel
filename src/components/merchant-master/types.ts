@@ -60,8 +60,9 @@ export interface MerchantProfile {
   type: MerchantType;            // category type mirror (Need/Want/…)
   tags: string[];                // JSON taxonomy tags
   seenCount: number;             // how often this profile was matched
-  confidence: number;            // match confidence, 0..1
-  verificationLevel: VerificationLevel;
+  confidence: number;            // match confidence, 0..1 (legacy / category-ish)
+  identityScore: number;         // KED-1110: merchant identity trust 1–5
+  verificationLevel: VerificationLevel; // legacy; prefer identityScore for identity
   createdAt: string;
   updatedAt: string;
 
@@ -77,8 +78,8 @@ export interface MerchantProfile {
 
 export interface MerchantMasterStats {
   totalProfiles: number;
-  needsReview: number;       // LLM low/medium
-  userConfirmed: number;
+  needsReview: number;       // identityScore <= 2 (guess / weak)
+  userConfirmed: number;     // identityScore >= 3
   withIdentifiers: number;
   duplicateGroups: number;
 }

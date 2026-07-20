@@ -21,6 +21,7 @@ export interface MerchantProfilePayload {
 }
 
 export interface MerchantProfileBatchPayload extends MerchantProfilePayload {
+  identityScore?: number;
   verificationLevel: string;
   type: string;
   tags: string[];

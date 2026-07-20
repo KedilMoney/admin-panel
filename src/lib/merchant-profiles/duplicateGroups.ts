@@ -144,16 +144,8 @@ export function formatGroupLabel(keyword: string): string {
 }
 
 export function pickSuggestedSurvivor(members: MerchantProfile[]): MerchantProfile {
-  const trustRank = (level: string) => {
-    if (level === 'multi_user_confirmed') return 5;
-    if (level === 'user_confirmed') return 4;
-    if (level === 'llm_high') return 3;
-    if (level === 'llm_medium') return 2;
-    return 1;
-  };
-
   return [...members].sort((left, right) => {
-    const trustDiff = trustRank(right.verificationLevel) - trustRank(left.verificationLevel);
+    const trustDiff = (right.identityScore ?? 1) - (left.identityScore ?? 1);
     if (trustDiff !== 0) return trustDiff;
     return right._count.transactions - left._count.transactions;
   })[0];

@@ -19,6 +19,27 @@ export const VERIFICATION_META: Record<VerificationLevel, { label: string; tone:
 
 export const VERIFICATION_LEVELS = Object.keys(VERIFICATION_META) as VerificationLevel[];
 
+/** KED-1110 identity score labels */
+export const IDENTITY_SCORE_META: Record<
+  1 | 2 | 3 | 4 | 5,
+  { label: string; tone: Tone }
+> = {
+  1: { label: '1 · Guess', tone: 'danger' },
+  2: { label: '2 · Weak business', tone: 'warning' },
+  3: { label: '3 · User-approved name', tone: 'success' },
+  4: { label: '4 · Strong reused', tone: 'success' },
+  5: { label: '5 · Known brand', tone: 'info' },
+};
+
+export const IDENTITY_SCORES = [1, 2, 3, 4, 5] as const;
+
+export function identityScoreTone(score: number): Tone {
+  if (score >= 5) return 'info';
+  if (score >= 3) return 'success';
+  if (score >= 2) return 'warning';
+  return 'danger';
+}
+
 export function buildCategoryToType(categories: SystemCategoryOption[]): Record<string, MerchantType> {
   const map: Record<string, MerchantType> = {};
   for (const category of categories) {
