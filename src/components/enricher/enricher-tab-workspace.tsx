@@ -39,7 +39,7 @@ const DOMAIN_COPY: Record<
   merchant: {
     title: 'Merchant names',
     description:
-      'LLM analyzes noisy UPI/bank narrations and suggests clean merchant names (and tags when present).',
+      'Finds ugly or noisy merchant names (including high-trust profiles) and suggests clean canonical names and tags.',
     currentLabel: 'Current merchant',
     suggestedLabel: 'Suggested merchant',
   },
