@@ -351,6 +351,14 @@ export interface EnricherSuggestion {
   source: 'llm' | 'extractor';
 }
 
+export interface EnricherQueueStats {
+  pending: number;
+  skipped: number;
+  resolved: number;
+  eligibleTotal: number;
+  remainingAfterBatch: number;
+}
+
 export interface EnricherScanResult {
   domain: EnricherDomain;
   summary: {
@@ -359,6 +367,7 @@ export interface EnricherScanResult {
     skipped: number;
     llmUsed: boolean;
   };
+  queue?: EnricherQueueStats;
   suggestions: EnricherSuggestion[];
 }
 

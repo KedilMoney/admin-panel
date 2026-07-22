@@ -310,6 +310,13 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
               Scanned {report.summary.scanned} · {report.summary.suggested} to review ·{' '}
               {report.summary.skipped} unchanged
               {report.summary.llmUsed ? ' · LLM active' : ' · extractor fallback'}
+              {report.queue ? (
+                <>
+                  {' '}
+                  · Queue {report.queue.eligibleTotal} eligible · {report.queue.remainingAfterBatch}{' '}
+                  remaining · {report.queue.skipped} skipped · {report.queue.resolved} resolved
+                </>
+              ) : null}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -328,7 +335,9 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
 
             {filtered.length === 0 ? (
               <p className="text-sm text-[var(--muted-foreground)]">
-                No suggestions in this scan. Try again later as new messy merchants appear.
+                {search.trim()
+                  ? `No matches for "${search.trim()}". ${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} in this scan — clear search to browse.`
+                  : 'No suggestions in this scan. Try again later as new messy merchants appear.'}
               </p>
             ) : (
               <>

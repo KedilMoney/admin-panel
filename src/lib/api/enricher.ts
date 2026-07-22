@@ -35,4 +35,19 @@ export const enricherApi = {
     });
     return response.data.data;
   },
+
+  getQueueStats: async (domain: EnricherDomain) => {
+    const response = await api.get<import('@/types').EnricherQueueStats>(
+      `/api/admin/enricher/queue-stats?domain=${encodeURIComponent(domain)}`
+    );
+    return response.data.data;
+  },
+
+  rebuildQueue: async (domain?: EnricherDomain) => {
+    const response = await api.post<{ domains: EnricherDomain[]; syncedProfiles: number }>(
+      '/api/admin/enricher/rebuild-queue',
+      domain ? { domain } : {}
+    );
+    return response.data.data;
+  },
 };
