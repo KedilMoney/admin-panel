@@ -62,6 +62,7 @@ export interface MerchantProfile {
   seenCount: number;             // how often this profile was matched
   confidence: number;            // match confidence, 0..1 (legacy / category-ish)
   identityScore: number;         // KED-1110: merchant identity trust 1–5
+  categoryScore: number;         // category confidence 1–5
   verificationLevel: VerificationLevel; // legacy; prefer identityScore for identity
   createdAt: string;
   updatedAt: string;
@@ -80,6 +81,8 @@ export interface MerchantMasterStats {
   totalProfiles: number;
   needsReview: number;       // identityScore <= 2 (guess / weak)
   userConfirmed: number;     // identityScore >= 3
+  needsCategoryReview: number; // categoryScore <= 2
+  categoryConfirmed: number;   // categoryScore >= 3
   withIdentifiers: number;
   duplicateGroups: number;
 }

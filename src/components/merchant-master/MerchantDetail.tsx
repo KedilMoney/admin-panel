@@ -6,6 +6,8 @@ import type { SystemCategoryOption } from '@/types';
 import {
   TYPES,
   IDENTITY_SCORES,
+  CATEGORY_SCORES,
+  categoryScoreMeta,
   identityScoreMeta,
   normalizeIdentityScore,
   initials,
@@ -124,6 +126,24 @@ function CoreFields({
           {IDENTITY_SCORES.map((score) => (
             <option key={score} value={score}>
               {identityScoreMeta(score).label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="mm-field">
+        <span className="mm-label">
+          Category score <span className="mm-label__hint">· how sure are we?</span>
+        </span>
+        <select
+          className="mm-select"
+          style={{ width: '100%' }}
+          value={m.categoryScore}
+          onChange={(e) => editor.setField('categoryScore', Number(e.target.value))}
+        >
+          {CATEGORY_SCORES.map((score) => (
+            <option key={score} value={score}>
+              {categoryScoreMeta(score).label}
             </option>
           ))}
         </select>

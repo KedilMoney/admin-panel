@@ -250,6 +250,8 @@ export interface MerchantProfile {
   confidence: number;
   /** KED-1110: merchant identity trust 1–5 */
   identityScore?: number;
+  /** Category confidence 1–5 */
+  categoryScore?: number;
   verificationLevel: string;
   seenCount: number;
   createdAt: string;

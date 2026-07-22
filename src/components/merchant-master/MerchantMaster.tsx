@@ -6,7 +6,10 @@ import type { SystemCategoryOption } from '@/types';
 import { MerchantDrawer, MerchantProfilePanel } from './MerchantDetail';
 import {
   IDENTITY_SCORES,
+  CATEGORY_SCORES,
+  categoryScoreMeta,
   identityScoreMeta,
+  normalizeCategoryScore,
   normalizeIdentityScore,
   initials,
   primaryIdentifier,
@@ -73,8 +76,9 @@ export default function MerchantMaster({
 }: MerchantMasterProps) {
   const [query, setQuery] = useState('');
   const [trust, setTrust] = useState('all');
+  const [categoryTrust, setCategoryTrust] = useState('all');
   const [category, setCategory] = useState('all');
-  const [quick, setQuick] = useState<'all' | 'review' | 'noid'>('all');
+  const [quick, setQuick] = useState<'all' | 'review' | 'category-review' | 'noid'>('all');
   const [selectedId, setSelectedId] = useState<string | null>(
     variant === 'split' ? (merchants[0]?.id ?? null) : null
   );
@@ -114,14 +118,18 @@ export default function MerchantMaster({
         if (!hay.includes(q)) return false;
       }
       if (trust !== 'all' && String(m.identityScore) !== trust) return false;
+      if (categoryTrust !== 'all' && String(m.categoryScore) !== categoryTrust) return false;
       if (category !== 'all' && m.systemCategoryId !== category) return false;
       if (quick === 'review' && m.identityScore > 2) {
+        return false;
+      }
+      if (quick === 'category-review' && m.categoryScore > 2) {
         return false;
       }
       if (quick === 'noid' && !(!m.upiId && m.identifiers.length === 0)) return false;
       return true;
     });
-  }, [merchants, query, trust, category, quick]);
+  }, [merchants, query, trust, categoryTrust, category, quick]);
 
   const selected = merchants.find((m) => m.id === selectedId) ?? null;
 
@@ -269,6 +277,14 @@ export default function MerchantMaster({
               <div className="mm-stat__value">{stats.userConfirmed}</div>
             </div>
             <div className="mm-stat">
+              <div className="mm-stat__label">Low category (1–2)</div>
+              <div className="mm-stat__value mm-stat__value--accent">{stats.needsCategoryReview}</div>
+            </div>
+            <div className="mm-stat">
+              <div className="mm-stat__label">Category trusted (3+)</div>
+              <div className="mm-stat__value">{stats.categoryConfirmed}</div>
+            </div>
+            <div className="mm-stat">
               <div className="mm-stat__label">With identifiers</div>
               <div className="mm-stat__value">{stats.withIdentifiers}</div>
             </div>
@@ -284,6 +300,8 @@ export default function MerchantMaster({
             filtered={filtered}
             trust={trust}
             setTrust={setTrust}
+            categoryTrust={categoryTrust}
+            setCategoryTrust={setCategoryTrust}
             category={category}
             setCategory={setCategory}
             quick={quick}
@@ -365,10 +383,12 @@ function TableWorkspace(props: {
   filtered: MerchantProfile[];
   trust: string;
   setTrust: (v: string) => void;
+  categoryTrust: string;
+  setCategoryTrust: (v: string) => void;
   category: string;
   setCategory: (v: string) => void;
-  quick: 'all' | 'review' | 'noid';
-  setQuick: (v: 'all' | 'review' | 'noid') => void;
+  quick: 'all' | 'review' | 'category-review' | 'noid';
+  setQuick: (v: 'all' | 'review' | 'category-review' | 'noid') => void;
   systemCategories: SystemCategoryOption[];
   openRow: (id: string) => void;
   selectedId: string | null;
@@ -385,6 +405,8 @@ function TableWorkspace(props: {
     filtered,
     trust,
     setTrust,
+    categoryTrust,
+    setCategoryTrust,
     category,
     setCategory,
     quick,
@@ -403,7 +425,7 @@ function TableWorkspace(props: {
   } = props;
   const cols = {
     display: 'grid',
-    gridTemplateColumns: '44px 2.3fr 1.3fr 1.7fr 0.8fr 0.8fr 1.6fr 1.1fr',
+    gridTemplateColumns: '44px 2.1fr 1.5fr 1.5fr 0.7fr 0.7fr 1.3fr 1.3fr 1fr',
   } as const;
 
   return (
@@ -416,6 +438,14 @@ function TableWorkspace(props: {
           {IDENTITY_SCORES.map((score) => (
             <option key={score} value={String(score)}>
               {identityScoreMeta(score).label}
+            </option>
+          ))}
+        </select>
+        <select className="mm-select" value={categoryTrust} onChange={(e) => setCategoryTrust(e.target.value)}>
+          <option value="all">All category scores</option>
+          {CATEGORY_SCORES.map((score) => (
+            <option key={score} value={String(score)}>
+              {categoryScoreMeta(score).label}
             </option>
           ))}
         </select>
@@ -448,6 +478,13 @@ function TableWorkspace(props: {
           </button>
           <button
             type="button"
+            className={quick === 'category-review' ? 'is-active' : ''}
+            onClick={() => setQuick(quick === 'category-review' ? 'all' : 'category-review')}
+          >
+            Category review
+          </button>
+          <button
+            type="button"
             className={quick === 'noid' ? 'is-active' : ''}
             onClick={() => setQuick(quick === 'noid' ? 'all' : 'noid')}
           >
@@ -473,6 +510,7 @@ function TableWorkspace(props: {
           <div className="mm-th mm-th--right">Aliases</div>
           <div className="mm-th mm-th--right">Txns</div>
           <div className="mm-th">Identity score</div>
+          <div className="mm-th">Category score</div>
           <div className="mm-th mm-th--right">Updated</div>
         </div>
 
@@ -480,6 +518,8 @@ function TableWorkspace(props: {
           const p = primaryIdentifier(m);
           const score = normalizeIdentityScore(m.identityScore);
           const meta = identityScoreMeta(score);
+          const catScore = normalizeCategoryScore(m.categoryScore);
+          const catMeta = categoryScoreMeta(catScore);
           const av = avatarTone(m.id);
           const selected = drawerOpen && selectedId === m.id;
           const checkedForMerge = bulkMergeIds.includes(m.id);
@@ -548,6 +588,13 @@ function TableWorkspace(props: {
                   <span className="mm-dot" />
                   <strong>{score}</strong>
                   <span style={{ marginLeft: 6 }}>{meta.shortLabel}</span>
+                </span>
+              </div>
+              <div>
+                <span className={`mm-chip mm-tone--${catMeta.tone}`} title={catMeta.label}>
+                  <span className="mm-dot" />
+                  <strong>{catScore}</strong>
+                  <span style={{ marginLeft: 6 }}>{catMeta.shortLabel}</span>
                 </span>
               </div>
               <div className="mm-cell-right" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>

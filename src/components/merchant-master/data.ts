@@ -35,6 +35,33 @@ export const IDENTITY_SCORES = [1, 2, 3, 4, 5] as const;
 
 export type IdentityScoreValue = (typeof IDENTITY_SCORES)[number];
 
+/** Category confidence (what category?) — symmetric with identity score */
+export const CATEGORY_SCORE_META: Record<
+  1 | 2 | 3 | 4 | 5,
+  { label: string; shortLabel: string; tone: Tone }
+> = {
+  1: { label: '1 — Guess', shortLabel: 'Guess', tone: 'danger' },
+  2: { label: '2 — Weak signal', shortLabel: 'Weak signal', tone: 'warning' },
+  3: { label: '3 — User confirmed', shortLabel: 'User confirmed', tone: 'success' },
+  4: { label: '4 — Strong reused', shortLabel: 'Strong reused', tone: 'success' },
+  5: { label: '5 — Known rule', shortLabel: 'Known rule', tone: 'info' },
+};
+
+export const CATEGORY_SCORES = [1, 2, 3, 4, 5] as const;
+
+export type CategoryScoreValue = (typeof CATEGORY_SCORES)[number];
+
+export function normalizeCategoryScore(score: number | undefined | null): CategoryScoreValue {
+  const n = Math.round(Number(score));
+  if (!Number.isFinite(n) || n <= 1) return 1;
+  if (n >= 5) return 5;
+  return n as CategoryScoreValue;
+}
+
+export function categoryScoreMeta(score: number | undefined | null) {
+  return CATEGORY_SCORE_META[normalizeCategoryScore(score)];
+}
+
 export function normalizeIdentityScore(score: number | undefined | null): IdentityScoreValue {
   const n = Math.round(Number(score));
   if (!Number.isFinite(n) || n <= 1) return 1;

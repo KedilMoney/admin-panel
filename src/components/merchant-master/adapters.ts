@@ -20,6 +20,7 @@ export function toHandoffMerchant(api: ApiProfile): UiProfile {
     seenCount: api.seenCount,
     confidence: api.confidence,
     identityScore: api.identityScore ?? 1,
+    categoryScore: api.categoryScore ?? 1,
     verificationLevel: api.verificationLevel as UiProfile['verificationLevel'],
     createdAt: formatDateTime(api.createdAt),
     updatedAt: formatDateTime(api.updatedAt),
@@ -53,6 +54,8 @@ export function computeStats(merchants: ApiProfile[]): MerchantMasterStats {
     totalProfiles: uiMerchants.length,
     needsReview: uiMerchants.filter((merchant) => merchant.identityScore <= 2).length,
     userConfirmed: uiMerchants.filter((merchant) => merchant.identityScore >= 3).length,
+    needsCategoryReview: uiMerchants.filter((merchant) => merchant.categoryScore <= 2).length,
+    categoryConfirmed: uiMerchants.filter((merchant) => merchant.categoryScore >= 3).length,
     withIdentifiers: uiMerchants.filter(
       (merchant) => Boolean(merchant.upiId) || merchant.identifiers.length > 0
     ).length,
@@ -77,6 +80,7 @@ export function toBatchSavePayload(snapshot: EditorSnapshot): MerchantProfileBat
     accountNumber: merchant.accountNumber.trim() || null,
     confidence: merchant.confidence,
     identityScore: merchant.identityScore,
+    categoryScore: merchant.categoryScore,
     verificationLevel: merchant.verificationLevel,
     type: merchant.type,
     tags: merchant.tags,
