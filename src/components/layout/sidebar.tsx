@@ -20,6 +20,7 @@ import {
   UserCheck,
   GraduationCap,
   Sparkles,
+  Coins,
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'Bank Master', href: '/bank-master', icon: Building2 },
+  { name: 'Reward Value Rates', href: '/reward-value-rates', icon: Coins },
   { name: 'Payees', href: '/payees', icon: UserCheck },
   { name: 'Merchant Profiles', href: '/merchant-master', icon: Store },
   { name: 'Enricher', href: '/enricher', icon: Sparkles },
