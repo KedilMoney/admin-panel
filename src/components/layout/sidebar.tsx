@@ -21,6 +21,7 @@ import {
   GraduationCap,
   Sparkles,
   Coins,
+  LayoutTemplate,
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -34,6 +35,7 @@ const navigation = [
   { name: 'Merchant Profiles', href: '/merchant-master', icon: Store },
   { name: 'Enricher', href: '/enricher', icon: Sparkles },
   { name: 'Category Tags', href: '/category-tags', icon: Tags },
+  { name: 'Templates', href: '/templates', icon: LayoutTemplate },
   { name: 'Auto-Cat Lab', href: '/auto-cat-lab', icon: FlaskConical },
   { name: 'Groups', href: '/groups', icon: FolderKanban },
   { name: 'Categories', href: '/categories', icon: FolderTree },

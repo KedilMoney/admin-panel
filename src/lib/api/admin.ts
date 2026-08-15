@@ -127,15 +127,36 @@ export const adminApi = {
     return response.data.data;
   },
 
-  getBudgetTemplate: async (): Promise<BudgetTemplateGroup[]> => {
-    const response = await api.get<BudgetTemplateGroup[]>('/api/admin/budget-template');
+  getBudgetTemplate: async (): Promise<{
+    template: BudgetTemplateGroup[];
+    isPersisted: boolean;
+  }> => {
+    const response = await api.get<{
+      template: BudgetTemplateGroup[];
+      isPersisted: boolean;
+    }>('/api/admin/budget-template');
     return response.data.data;
   },
 
   updateBudgetTemplate: async (
     template: BudgetTemplateGroup[]
-  ): Promise<BudgetTemplateGroup[]> => {
-    const response = await api.put<BudgetTemplateGroup[]>('/api/admin/budget-template', { template });
+  ): Promise<{ template: BudgetTemplateGroup[]; isPersisted: boolean }> => {
+    const response = await api.put<{
+      template: BudgetTemplateGroup[];
+      isPersisted: boolean;
+    }>('/api/admin/budget-template', { template });
+    return response.data.data;
+  },
+
+  /** Persist the same defaults email signup uses into Admin Template. */
+  provisionBudgetTemplate: async (): Promise<{
+    template: BudgetTemplateGroup[];
+    isPersisted: boolean;
+  }> => {
+    const response = await api.post<{
+      template: BudgetTemplateGroup[];
+      isPersisted: boolean;
+    }>('/api/admin/budget-template/provision');
     return response.data.data;
   },
 

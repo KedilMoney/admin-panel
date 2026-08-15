@@ -52,6 +52,17 @@ export const useUpdateBudgetTemplate = () => {
   });
 };
 
+export const useProvisionBudgetTemplate = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => adminApi.provisionBudgetTemplate(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-budget-template'] });
+    },
+  });
+};
+
 export const useCategoryTags = () => {
   return useQuery({
     queryKey: ['admin-category-tags'],
