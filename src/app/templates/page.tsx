@@ -19,13 +19,16 @@ import {
   useProvisionBudgetTemplate,
   useUpdateBudgetTemplate,
 } from '@/lib/hooks/useAdmin';
+import { useIcons } from '@/lib/hooks/useIcons';
 import {
   BudgetTemplateCategoryType,
   BudgetTemplateGroup,
 } from '@/lib/api/admin';
-import { Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Icon } from '@/types';
+import { Image as ImageIcon, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 
 const TEMPLATE_TYPE_OPTIONS: BudgetTemplateCategoryType[] = ['need', 'want', 'saving'];
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money';
 
 type ApiError = {
   response?: {
@@ -54,6 +57,13 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return fallback;
 };
 
+function resolveImageUrl(imageUrl?: string | null): string | undefined {
+  if (!imageUrl) return undefined;
+  if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+  const normalizedPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+}
+
 export default function TemplatesPage() {
   const {
     data: budgetTemplatePayload,
@@ -64,6 +74,14 @@ export default function TemplatesPage() {
   const isTemplatePersisted = budgetTemplatePayload?.isPersisted ?? false;
   const updateTemplate = useUpdateBudgetTemplate();
   const provisionTemplate = useProvisionBudgetTemplate();
+  const { data: iconsData } = useIcons();
+  const icons = Array.isArray(iconsData) ? iconsData : [];
+
+  const iconsById = useMemo(() => {
+    const map = new Map<string, Icon>();
+    icons.forEach((icon) => map.set(icon.id, icon));
+    return map;
+  }, [icons]);
 
   const [templateDraftOverride, setTemplateDraftOverride] = useState<BudgetTemplateGroup[] | null>(
     null
@@ -72,6 +90,11 @@ export default function TemplatesPage() {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [iconPicker, setIconPicker] = useState<{
+    groupIndex: number;
+    categoryIndex: number;
+  } | null>(null);
+  const [iconSearch, setIconSearch] = useState('');
 
   const templateFromApi = useMemo(() => {
     return budgetTemplate.map((group) => ({
@@ -79,6 +102,7 @@ export default function TemplatesPage() {
       categories: group.categories.map((category) => ({
         name: category.name,
         type: category.type,
+        iconId: category.iconId ?? null,
       })),
     }));
   }, [budgetTemplate]);
@@ -92,6 +116,18 @@ export default function TemplatesPage() {
     () => JSON.stringify(templateDraft) !== JSON.stringify(templateFromApi),
     [templateDraft, templateFromApi]
   );
+
+  const filteredIcons = useMemo(() => {
+    const q = iconSearch.trim().toLowerCase();
+    if (!q) return icons.slice(0, 80);
+    return icons
+      .filter((icon) => {
+        const slug = icon.slug?.toLowerCase() ?? '';
+        const tags = (icon.searchTags ?? []).join(' ').toLowerCase();
+        return slug.includes(q) || tags.includes(q);
+      })
+      .slice(0, 80);
+  }, [icons, iconSearch]);
 
   const setGroupName = (groupIndex: number, value: string) => {
     updateTemplateDraft((prev) =>
@@ -108,7 +144,7 @@ export default function TemplatesPage() {
       ...prev,
       {
         name: `New Group ${prev.length + 1}`,
-        categories: [{ name: 'New Category', type: 'need' }],
+        categories: [{ name: 'New Category', type: 'need', iconId: null }],
       },
     ]);
   };
@@ -119,7 +155,10 @@ export default function TemplatesPage() {
         idx === groupIndex
           ? {
               ...group,
-              categories: [...group.categories, { name: 'New Category', type: 'need' }],
+              categories: [
+                ...group.categories,
+                { name: 'New Category', type: 'need', iconId: null },
+              ],
             }
           : group
       )
@@ -153,6 +192,25 @@ export default function TemplatesPage() {
               ...group,
               categories: group.categories.map((category, cIdx) =>
                 cIdx === categoryIndex ? { ...category, type } : category
+              ),
+            }
+          : group
+      )
+    );
+  };
+
+  const setCategoryIcon = (
+    groupIndex: number,
+    categoryIndex: number,
+    iconId: string | null
+  ) => {
+    updateTemplateDraft((prev) =>
+      prev.map((group, idx) =>
+        idx === groupIndex
+          ? {
+              ...group,
+              categories: group.categories.map((category, cIdx) =>
+                cIdx === categoryIndex ? { ...category, iconId } : category
               ),
             }
           : group
@@ -311,55 +369,110 @@ export default function TemplatesPage() {
                   </div>
 
                   <div className="space-y-2">
-                    {group.categories.map((category, categoryIndex) => (
-                      <div
-                        key={`${groupIndex}-${categoryIndex}`}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-2"
-                      >
-                        <div className="md:col-span-7">
-                          <Input
-                            value={category.name}
-                            onChange={(e) =>
-                              setCategoryName(groupIndex, categoryIndex, e.target.value)
-                            }
-                            placeholder="Category name"
-                          />
+                    {group.categories.map((category, categoryIndex) => {
+                      const selectedIcon = category.iconId
+                        ? iconsById.get(category.iconId)
+                        : undefined;
+                      const imageUrl = resolveImageUrl(selectedIcon?.imageUrl);
+
+                      return (
+                        <div
+                          key={`${groupIndex}-${categoryIndex}`}
+                          className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center"
+                        >
+                          <div className="md:col-span-1">
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded border bg-[var(--background)] hover:bg-[var(--accent)]"
+                              title={selectedIcon?.slug || 'Choose icon'}
+                              onClick={() => {
+                                setIconSearch('');
+                                setIconPicker({ groupIndex, categoryIndex });
+                              }}
+                              disabled={updateTemplate.isPending}
+                            >
+                              {imageUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={imageUrl}
+                                  alt={selectedIcon?.slug || 'icon'}
+                                  className="h-6 w-6 object-contain"
+                                />
+                              ) : (
+                                <ImageIcon className="h-4 w-4 text-[var(--muted-foreground)]" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="md:col-span-5">
+                            <Input
+                              value={category.name}
+                              onChange={(e) =>
+                                setCategoryName(groupIndex, categoryIndex, e.target.value)
+                              }
+                              placeholder="Category name"
+                            />
+                          </div>
+                          <div className="md:col-span-3">
+                            <Select
+                              value={category.type}
+                              onValueChange={(value) =>
+                                setCategoryType(
+                                  groupIndex,
+                                  categoryIndex,
+                                  value as BudgetTemplateCategoryType
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {TEMPLATE_TYPE_OPTIONS.map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {type}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="md:col-span-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                setIconSearch('');
+                                setIconPicker({ groupIndex, categoryIndex });
+                              }}
+                              disabled={updateTemplate.isPending}
+                            >
+                              {category.iconId ? 'Change icon' : 'Add icon'}
+                            </Button>
+                          </div>
+                          <div className="md:col-span-1 flex gap-1">
+                            {category.iconId && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Clear icon"
+                                onClick={() => setCategoryIcon(groupIndex, categoryIndex, null)}
+                                disabled={updateTemplate.isPending}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeCategory(groupIndex, categoryIndex)}
+                              disabled={updateTemplate.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="md:col-span-4">
-                          <Select
-                            value={category.type}
-                            onValueChange={(value) =>
-                              setCategoryType(
-                                groupIndex,
-                                categoryIndex,
-                                value as BudgetTemplateCategoryType
-                              )
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TEMPLATE_TYPE_OPTIONS.map((type) => (
-                                <SelectItem key={type} value={type}>
-                                  {type}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="md:col-span-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeCategory(groupIndex, categoryIndex)}
-                            disabled={updateTemplate.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     <Button
                       variant="outline"
                       size="sm"
@@ -380,6 +493,63 @@ export default function TemplatesPage() {
               )}
             </CardContent>
           </Card>
+
+          {iconPicker && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-2xl rounded-lg border bg-[var(--card)] shadow-lg">
+                <div className="flex items-center justify-between border-b px-4 py-3">
+                  <h2 className="font-semibold">Choose icon</h2>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIconPicker(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="space-y-3 p-4">
+                  <Input
+                    value={iconSearch}
+                    onChange={(e) => setIconSearch(e.target.value)}
+                    placeholder="Search icons by slug or tag"
+                  />
+                  <div className="grid max-h-80 grid-cols-4 gap-2 overflow-y-auto sm:grid-cols-6">
+                    {filteredIcons.map((icon) => {
+                      const url = resolveImageUrl(icon.imageUrl);
+                      return (
+                        <button
+                          key={icon.id}
+                          type="button"
+                          className="flex flex-col items-center gap-1 rounded border p-2 hover:bg-[var(--accent)]"
+                          onClick={() => {
+                            setCategoryIcon(
+                              iconPicker.groupIndex,
+                              iconPicker.categoryIndex,
+                              icon.id
+                            );
+                            setIconPicker(null);
+                          }}
+                        >
+                          {url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={url} alt={icon.slug} className="h-8 w-8 object-contain" />
+                          ) : (
+                            <ImageIcon className="h-8 w-8 text-[var(--muted-foreground)]" />
+                          )}
+                          <span className="truncate w-full text-center text-[10px] text-[var(--muted-foreground)]">
+                            {icon.slug}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {filteredIcons.length === 0 && (
+                    <p className="text-sm text-[var(--muted-foreground)]">No icons match.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </AdminLayout>
     </AuthGuard>

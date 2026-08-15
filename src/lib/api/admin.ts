@@ -5,6 +5,7 @@ export type BudgetTemplateCategoryType = 'need' | 'want' | 'saving';
 export interface BudgetTemplateCategory {
   name: string;
   type: BudgetTemplateCategoryType;
+  iconId?: string | null;
 }
 
 export interface BudgetTemplateGroup {
