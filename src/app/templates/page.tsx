@@ -403,7 +403,7 @@ export default function TemplatesPage() {
                               )}
                             </button>
                           </div>
-                          <div className="md:col-span-5">
+                          <div className="md:col-span-6">
                             <Input
                               value={category.name}
                               onChange={(e) =>
@@ -435,21 +435,7 @@ export default function TemplatesPage() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="md:col-span-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                setIconSearch('');
-                                setIconPicker({ groupIndex, categoryIndex });
-                              }}
-                              disabled={updateTemplate.isPending}
-                            >
-                              {category.iconId ? 'Change icon' : 'Add icon'}
-                            </Button>
-                          </div>
-                          <div className="md:col-span-1 flex gap-1">
+                          <div className="md:col-span-2 flex gap-1 justify-end">
                             {category.iconId && (
                               <Button
                                 variant="ghost"
