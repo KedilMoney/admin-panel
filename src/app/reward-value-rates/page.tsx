@@ -18,7 +18,6 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDate } from '@/lib/utils';
@@ -27,9 +26,12 @@ import {
   EMPTY_RATE_FORM,
   RateFormDialog,
   RateFormState,
-  formToInput,
-  rateToForm,
+  buildSubmitActions,
+  cardGroupKey,
+  ratesToForm,
+  validateRateForm,
 } from './components/rate-form-dialog';
+import { BankSelectField } from './components/bank-select-field';
 
 function formatValuePerPoint(value: string | number): string {
   const numeric = Number(value);
@@ -50,7 +52,7 @@ export default function RewardValueRatesPage() {
   const [bankFilter, setBankFilter] = useState('');
   const [modeFilter, setModeFilter] = useState<string>('ALL');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingRate, setEditingRate] = useState<RewardValueRate | null>(null);
+  const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
   const [form, setForm] = useState<RateFormState>(EMPTY_RATE_FORM);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -68,15 +70,17 @@ export default function RewardValueRatesPage() {
   const deleteRate = useDeleteRewardValueRate();
 
   const openCreateDialog = () => {
-    setEditingRate(null);
+    setEditingGroupKey(null);
     setForm(EMPTY_RATE_FORM);
     setFormError(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (rate: RewardValueRate) => {
-    setEditingRate(rate);
-    setForm(rateToForm(rate));
+    const groupKey = cardGroupKey(rate);
+    const groupRates = (rates ?? []).filter((row) => cardGroupKey(row) === groupKey);
+    setEditingGroupKey(groupKey);
+    setForm(ratesToForm(groupRates.length > 0 ? groupRates : [rate]));
     setFormError(null);
     setDialogOpen(true);
   };
@@ -84,7 +88,7 @@ export default function RewardValueRatesPage() {
   const handleDialogChange = (open: boolean) => {
     setDialogOpen(open);
     if (!open) {
-      setEditingRate(null);
+      setEditingGroupKey(null);
       setFormError(null);
     }
   };
@@ -92,29 +96,30 @@ export default function RewardValueRatesPage() {
   const handleSubmit = async () => {
     setFormError(null);
 
-    const valuePerPoint = Number(form.valuePerPoint);
-    if (!form.bankName.trim()) {
-      setFormError('Bank name is required.');
+    const validationError = validateRateForm(form);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
-    if (!Number.isFinite(valuePerPoint) || valuePerPoint <= 0) {
-      setFormError('Value per point must be a positive number.');
-      return;
-    }
-    if (!form.effectiveFrom) {
-      setFormError('Effective from date is required.');
+
+    const actions = buildSubmitActions(form, editingGroupKey != null);
+    if (actions.length === 0) {
+      setFormError('Add at least one redemption mode with a positive value per point.');
       return;
     }
 
     try {
-      const input = formToInput(form);
-      if (editingRate) {
-        await updateRate.mutateAsync({ id: editingRate.id, input });
-      } else {
-        await createRate.mutateAsync(input);
+      for (const action of actions) {
+        if (action.type === 'create') {
+          await createRate.mutateAsync(action.input);
+        } else if (action.type === 'update') {
+          await updateRate.mutateAsync({ id: action.id, input: action.input });
+        } else {
+          await deleteRate.mutateAsync(action.id);
+        }
       }
       setDialogOpen(false);
-      setEditingRate(null);
+      setEditingGroupKey(null);
     } catch (submitError) {
       setFormError(getErrorMessage(submitError));
     }
@@ -131,7 +136,7 @@ export default function RewardValueRatesPage() {
     }
   };
 
-  const isSubmitting = createRate.isPending || updateRate.isPending;
+  const isSubmitting = createRate.isPending || updateRate.isPending || deleteRate.isPending;
 
   return (
     <AuthGuard>
@@ -151,7 +156,7 @@ export default function RewardValueRatesPage() {
               </Button>
               <Button onClick={openCreateDialog} size="sm">
                 <Plus className="h-4 w-4 mr-2" />
-                Add rate
+                Add rates
               </Button>
             </div>
           </div>
@@ -162,10 +167,13 @@ export default function RewardValueRatesPage() {
               <CardDescription>Filter by bank name and redemption mode.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
-              <Input
+              <BankSelectField
                 value={bankFilter}
-                onChange={(event) => setBankFilter(event.target.value)}
-                placeholder="Filter by bank name"
+                onChange={setBankFilter}
+                id="bankFilter"
+                allowAll
+                allLabel="All banks"
+                label="Bank"
               />
               <Select value={modeFilter} onValueChange={setModeFilter}>
                 <SelectTrigger>
@@ -207,11 +215,11 @@ export default function RewardValueRatesPage() {
                   <Coins className="h-10 w-10 text-[var(--muted-foreground)]" />
                   <p className="text-sm font-medium text-[var(--foreground)]">No rates yet</p>
                   <p className="text-sm text-[var(--muted-foreground)]">
-                    Add a rate to start showing points worth on credit card reward panels.
+                    Add rates to start showing points worth on credit card reward panels.
                   </p>
                   <Button onClick={openCreateDialog} size="sm" className="mt-2">
                     <Plus className="h-4 w-4 mr-2" />
-                    Add first rate
+                    Add first rates
                   </Button>
                 </div>
               ) : (
@@ -250,7 +258,12 @@ export default function RewardValueRatesPage() {
                           <TableCell className="max-w-[180px] truncate">{rate.source ?? '—'}</TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button variant="outline" size="sm" onClick={() => openEditDialog(rate)}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openEditDialog(rate)}
+                                title="Edit all modes for this card"
+                              >
                                 <Edit className="h-4 w-4" />
                               </Button>
                               <Button
@@ -276,7 +289,7 @@ export default function RewardValueRatesPage() {
         <RateFormDialog
           open={dialogOpen}
           onOpenChange={handleDialogChange}
-          editingRate={editingRate}
+          isEdit={editingGroupKey != null}
           form={form}
           onFormChange={setForm}
           onSubmit={handleSubmit}

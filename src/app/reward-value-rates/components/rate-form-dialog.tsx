@@ -11,74 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  REWARD_MODE_LABELS,
-  REWARD_REDEMPTION_MODES,
-  RewardRedemptionMode,
-  RewardValueRate,
-  RewardValueRateInput,
-} from '@/lib/api/rewardValueRates';
-
-export type RateFormState = {
-  bankName: string;
-  cardName: string;
-  mode: RewardRedemptionMode;
-  valuePerPoint: string;
-  minPoints: string;
-  effectiveFrom: string;
-  effectiveTo: string;
-  source: string;
-  isActive: boolean;
-};
-
-export const EMPTY_RATE_FORM: RateFormState = {
-  bankName: '',
-  cardName: '',
-  mode: 'FLIGHT',
-  valuePerPoint: '',
-  minPoints: '',
-  effectiveFrom: new Date().toISOString().slice(0, 10),
-  effectiveTo: '',
-  source: '',
-  isActive: true,
-};
-
-export function rateToForm(rate: RewardValueRate): RateFormState {
-  return {
-    bankName: rate.bankName,
-    cardName: rate.cardName ?? '',
-    mode: rate.mode,
-    valuePerPoint: String(rate.valuePerPoint),
-    minPoints: rate.minPoints != null ? String(rate.minPoints) : '',
-    effectiveFrom: rate.effectiveFrom.slice(0, 10),
-    effectiveTo: rate.effectiveTo ? rate.effectiveTo.slice(0, 10) : '',
-    source: rate.source ?? '',
-    isActive: rate.isActive,
-  };
-}
-
-export function formToInput(form: RateFormState): RewardValueRateInput {
-  const minPointsRaw = form.minPoints.trim();
-  return {
-    bankName: form.bankName.trim(),
-    cardName: form.cardName.trim() ? form.cardName.trim() : null,
-    mode: form.mode,
-    valuePerPoint: Number(form.valuePerPoint),
-    minPoints: minPointsRaw ? Number(minPointsRaw) : null,
-    effectiveFrom: new Date(`${form.effectiveFrom}T00:00:00.000Z`).toISOString(),
-    effectiveTo: form.effectiveTo.trim()
-      ? new Date(`${form.effectiveTo}T00:00:00.000Z`).toISOString()
-      : null,
-    source: form.source.trim() ? form.source.trim() : null,
-    isActive: form.isActive,
-  };
-}
+import { REWARD_MODE_LABELS, REWARD_REDEMPTION_MODES } from '@/lib/api/rewardValueRates';
+import { BankSelectField } from './bank-select-field';
+import type { ModeRateFormEntry, RateFormState } from './rate-form-utils';
 
 interface RateFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editingRate: RewardValueRate | null;
+  isEdit: boolean;
   form: RateFormState;
   onFormChange: (form: RateFormState) => void;
   onSubmit: () => Promise<void>;
@@ -89,7 +29,7 @@ interface RateFormDialogProps {
 export function RateFormDialog({
   open,
   onOpenChange,
-  editingRate,
+  isEdit,
   form,
   onFormChange,
   onSubmit,
@@ -100,13 +40,29 @@ export function RateFormDialog({
     onFormChange({ ...form, [key]: value });
   };
 
+  const setModeField = <K extends keyof ModeRateFormEntry>(
+    mode: ModeRateFormEntry['mode'],
+    key: K,
+    value: ModeRateFormEntry[K]
+  ) => {
+    onFormChange({
+      ...form,
+      modes: form.modes.map((entry) => (entry.mode === mode ? { ...entry, [key]: value } : entry)),
+    });
+  };
+
+  const filledModeCount = form.modes.filter((entry) => entry.valuePerPoint.trim()).length;
+  const cardLabel = form.cardName.trim() || 'All cards';
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} contentWrapperClassName="max-w-xl">
+    <Dialog open={open} onOpenChange={onOpenChange} contentWrapperClassName="max-w-2xl">
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editingRate ? 'Edit reward value rate' : 'Add reward value rate'}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit reward value rates' : 'Add reward value rates'}</DialogTitle>
           <DialogDescription>
-            Set how many rupees one reward point is worth for a bank and redemption mode.
+            {isEdit
+              ? `Update redemption values for ${form.bankName || 'this bank'} · ${cardLabel}.`
+              : 'Set rupee value per reward point for one bank and card across multiple redemption modes.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,76 +73,78 @@ export function RateFormDialog({
             void onSubmit();
           }}
         >
-          <div className="space-y-2">
-            <Label htmlFor="bankName">Bank name</Label>
-            <Input
-              id="bankName"
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <BankSelectField
               value={form.bankName}
-              onChange={(event) => setField('bankName', event.target.value)}
-              placeholder="HDFC"
-              required
-              disabled={isSubmitting}
+              onChange={(bankName) => setField('bankName', bankName)}
+              disabled={isSubmitting || isEdit}
             />
+
+            <div className="space-y-2">
+              <Label htmlFor="cardName">Card name</Label>
+              <Input
+                id="cardName"
+                value={form.cardName}
+                onChange={(event) => setField('cardName', event.target.value)}
+                placeholder="Infinia"
+                disabled={isSubmitting || isEdit}
+              />
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Leave blank to apply these rates to every card from the bank.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="cardName">Card name</Label>
-            <Input
-              id="cardName"
-              value={form.cardName}
-              onChange={(event) => setField('cardName', event.target.value)}
-              placeholder="Infinia"
-              disabled={isSubmitting}
-            />
+            <div className="flex items-center justify-between gap-3">
+              <Label>Redemption modes</Label>
+              <span className="text-xs text-[var(--muted-foreground)]">
+                {filledModeCount} mode{filledModeCount === 1 ? '' : 's'} configured
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-md border border-[var(--border)]">
+              <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                <span>Mode</span>
+                <span>Value / point (₹)</span>
+                <span>Min points</span>
+              </div>
+              {REWARD_REDEMPTION_MODES.map((mode) => {
+                const entry = form.modes.find((row) => row.mode === mode);
+                if (!entry) return null;
+
+                return (
+                  <div
+                    key={mode}
+                    className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[var(--border)] px-3 py-3 last:border-b-0"
+                  >
+                    <div className="flex items-center text-sm font-medium text-[var(--foreground)]">
+                      {REWARD_MODE_LABELS[mode]}
+                    </div>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      value={entry.valuePerPoint}
+                      onChange={(event) => setModeField(mode, 'valuePerPoint', event.target.value)}
+                      placeholder="Optional"
+                      disabled={isSubmitting}
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={entry.minPoints}
+                      onChange={(event) => setModeField(mode, 'minPoints', event.target.value)}
+                      placeholder="Optional"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                );
+              })}
+            </div>
             <p className="text-xs text-[var(--muted-foreground)]">
-              Leave blank to apply this rate to every card from the bank.
+              Fill in only the modes you want. Leave a row blank to skip it on create, or remove it on edit.
             </p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Redemption mode</Label>
-            <Select value={form.mode} onValueChange={(value) => setField('mode', value as RewardRedemptionMode)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select mode" />
-              </SelectTrigger>
-              <SelectContent>
-                {REWARD_REDEMPTION_MODES.map((mode) => (
-                  <SelectItem key={mode} value={mode}>
-                    {REWARD_MODE_LABELS[mode]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="valuePerPoint">Value per point (₹)</Label>
-              <Input
-                id="valuePerPoint"
-                type="number"
-                min="0"
-                step="0.0001"
-                value={form.valuePerPoint}
-                onChange={(event) => setField('valuePerPoint', event.target.value)}
-                placeholder="1.0"
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="minPoints">Minimum points</Label>
-              <Input
-                id="minPoints"
-                type="number"
-                min="0"
-                step="1"
-                value={form.minPoints}
-                onChange={(event) => setField('minPoints', event.target.value)}
-                placeholder="Optional"
-                disabled={isSubmitting}
-              />
-            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -224,7 +182,7 @@ export function RateFormDialog({
             />
           </div>
 
-          {editingRate ? (
+          {isEdit ? (
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -245,7 +203,7 @@ export function RateFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving…' : editingRate ? 'Save changes' : 'Create rate'}
+              {isSubmitting ? 'Saving…' : isEdit ? 'Save changes' : 'Create rates'}
             </Button>
           </DialogFooter>
         </form>
@@ -253,3 +211,12 @@ export function RateFormDialog({
     </Dialog>
   );
 }
+
+export {
+  EMPTY_RATE_FORM,
+  buildSubmitActions,
+  cardGroupKey,
+  ratesToForm,
+  validateRateForm,
+} from './rate-form-utils';
+export type { RateFormState } from './rate-form-utils';
