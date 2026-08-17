@@ -26,6 +26,44 @@ export function cardGroupKey(rate: Pick<RewardValueRate, 'bankName' | 'cardName'
   return `${rate.bankName}::${rate.cardName ?? ''}`;
 }
 
+export type RateCardGroup = {
+  key: string;
+  bankName: string;
+  cardName: string | null;
+  rates: RewardValueRate[];
+};
+
+export function groupRatesByCard(rates: RewardValueRate[]): RateCardGroup[] {
+  const groups = new Map<string, RewardValueRate[]>();
+
+  for (const rate of rates) {
+    const key = cardGroupKey(rate);
+    const existing = groups.get(key) ?? [];
+    existing.push(rate);
+    groups.set(key, existing);
+  }
+
+  return [...groups.entries()]
+    .map(([key, groupRates]) => {
+      const primary = groupRates[0];
+      const modeOrder = new Map(REWARD_REDEMPTION_MODES.map((mode, index) => [mode, index]));
+      const sortedRates = [...groupRates].sort(
+        (a, b) => (modeOrder.get(a.mode) ?? 99) - (modeOrder.get(b.mode) ?? 99)
+      );
+      return {
+        key,
+        bankName: primary.bankName,
+        cardName: primary.cardName,
+        rates: sortedRates,
+      };
+    })
+    .sort((a, b) => {
+      const bank = a.bankName.localeCompare(b.bankName);
+      if (bank !== 0) return bank;
+      return (a.cardName ?? '').localeCompare(b.cardName ?? '');
+    });
+}
+
 function emptyModeEntries(): ModeRateFormEntry[] {
   return REWARD_REDEMPTION_MODES.map((mode) => ({
     mode,

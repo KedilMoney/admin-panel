@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { REWARD_MODE_LABELS, REWARD_REDEMPTION_MODES } from '@/lib/api/rewardValueRates';
@@ -55,150 +54,157 @@ export function RateFormDialog({
   const cardLabel = form.cardName.trim() || 'All cards';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} contentWrapperClassName="max-w-2xl">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit reward value rates' : 'Add reward value rates'}</DialogTitle>
+    <Dialog open={open} onOpenChange={onOpenChange} contentWrapperClassName="max-w-2xl my-4">
+      <DialogContent className="flex max-h-[min(90vh,760px)] flex-col overflow-hidden p-0">
+        <div className="shrink-0 space-y-1 border-b border-[var(--border)] px-5 py-4">
+          <DialogTitle className="text-xl">{isEdit ? 'Edit reward value rates' : 'Add reward value rates'}</DialogTitle>
           <DialogDescription>
             {isEdit
               ? `Update redemption values for ${form.bankName || 'this bank'} · ${cardLabel}.`
-              : 'Set rupee value per reward point for one bank and card across multiple redemption modes.'}
+              : 'Configure every redemption mode for one bank and card in a single save.'}
           </DialogDescription>
-        </DialogHeader>
+        </div>
 
         <form
-          className="space-y-4"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
             void onSubmit();
           }}
         >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <BankSelectField
-              value={form.bankName}
-              onChange={(bankName) => setField('bankName', bankName)}
-              disabled={isSubmitting || isEdit}
-            />
-
-            <div className="space-y-2">
-              <Label htmlFor="cardName">Card name</Label>
-              <Input
-                id="cardName"
-                value={form.cardName}
-                onChange={(event) => setField('cardName', event.target.value)}
-                placeholder="Infinia"
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <BankSelectField
+                value={form.bankName}
+                onChange={(bankName) => setField('bankName', bankName)}
                 disabled={isSubmitting || isEdit}
               />
+
+              <div className="space-y-2">
+                <Label htmlFor="cardName">Card name</Label>
+                <Input
+                  id="cardName"
+                  className="h-9"
+                  value={form.cardName}
+                  onChange={(event) => setField('cardName', event.target.value)}
+                  placeholder="Infinia"
+                  disabled={isSubmitting || isEdit}
+                />
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Leave blank to apply these rates to every card from the bank.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label>Redemption modes</Label>
+                <span className="text-xs text-[var(--muted-foreground)]">
+                  {filledModeCount} mode{filledModeCount === 1 ? '' : 's'} configured
+                </span>
+              </div>
+              <div className="overflow-hidden rounded-md border border-[var(--border)]">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)] gap-2 border-b border-[var(--border)] bg-[var(--muted)]/40 px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
+                  <span>Mode</span>
+                  <span>Value / pt (₹)</span>
+                  <span>Min pts</span>
+                </div>
+                {REWARD_REDEMPTION_MODES.map((mode) => {
+                  const entry = form.modes.find((row) => row.mode === mode);
+                  if (!entry) return null;
+
+                  return (
+                    <div
+                      key={mode}
+                      className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,0.8fr)] gap-2 border-b border-[var(--border)] px-2.5 py-1.5 last:border-b-0"
+                    >
+                      <div className="flex items-center text-sm text-[var(--foreground)]">
+                        {REWARD_MODE_LABELS[mode]}
+                      </div>
+                      <Input
+                        className="h-8"
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        value={entry.valuePerPoint}
+                        onChange={(event) => setModeField(mode, 'valuePerPoint', event.target.value)}
+                        placeholder="—"
+                        disabled={isSubmitting}
+                      />
+                      <Input
+                        className="h-8"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={entry.minPoints}
+                        onChange={(event) => setModeField(mode, 'minPoints', event.target.value)}
+                        placeholder="—"
+                        disabled={isSubmitting}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
               <p className="text-xs text-[var(--muted-foreground)]">
-                Leave blank to apply these rates to every card from the bank.
+                Leave a mode blank to skip it. The list view groups all modes under one card row.
               </p>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <Label>Redemption modes</Label>
-              <span className="text-xs text-[var(--muted-foreground)]">
-                {filledModeCount} mode{filledModeCount === 1 ? '' : 's'} configured
-              </span>
-            </div>
-            <div className="overflow-hidden rounded-md border border-[var(--border)]">
-              <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[var(--border)] bg-[var(--muted)]/40 px-3 py-2 text-xs font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
-                <span>Mode</span>
-                <span>Value / point (₹)</span>
-                <span>Min points</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="effectiveFrom">Effective from</Label>
+                <Input
+                  id="effectiveFrom"
+                  className="h-9"
+                  type="date"
+                  value={form.effectiveFrom}
+                  onChange={(event) => setField('effectiveFrom', event.target.value)}
+                  required
+                  disabled={isSubmitting}
+                />
               </div>
-              {REWARD_REDEMPTION_MODES.map((mode) => {
-                const entry = form.modes.find((row) => row.mode === mode);
-                if (!entry) return null;
-
-                return (
-                  <div
-                    key={mode}
-                    className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 border-b border-[var(--border)] px-3 py-3 last:border-b-0"
-                  >
-                    <div className="flex items-center text-sm font-medium text-[var(--foreground)]">
-                      {REWARD_MODE_LABELS[mode]}
-                    </div>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      value={entry.valuePerPoint}
-                      onChange={(event) => setModeField(mode, 'valuePerPoint', event.target.value)}
-                      placeholder="Optional"
-                      disabled={isSubmitting}
-                    />
-                    <Input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={entry.minPoints}
-                      onChange={(event) => setModeField(mode, 'minPoints', event.target.value)}
-                      placeholder="Optional"
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                );
-              })}
+              <div className="space-y-2">
+                <Label htmlFor="effectiveTo">Effective to</Label>
+                <Input
+                  id="effectiveTo"
+                  className="h-9"
+                  type="date"
+                  value={form.effectiveTo}
+                  onChange={(event) => setField('effectiveTo', event.target.value)}
+                  disabled={isSubmitting}
+                />
+              </div>
             </div>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Fill in only the modes you want. Leave a row blank to skip it on create, or remove it on edit.
-            </p>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="effectiveFrom">Effective from</Label>
+              <Label htmlFor="source">Source</Label>
               <Input
-                id="effectiveFrom"
-                type="date"
-                value={form.effectiveFrom}
-                onChange={(event) => setField('effectiveFrom', event.target.value)}
-                required
+                id="source"
+                className="h-9"
+                value={form.source}
+                onChange={(event) => setField('source', event.target.value)}
+                placeholder="HDFC Smartbuy T&C"
                 disabled={isSubmitting}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="effectiveTo">Effective to</Label>
-              <Input
-                id="effectiveTo"
-                type="date"
-                value={form.effectiveTo}
-                onChange={(event) => setField('effectiveTo', event.target.value)}
-                disabled={isSubmitting}
-              />
-            </div>
+
+            {isEdit ? (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(event) => setField('isActive', event.target.checked)}
+                  disabled={isSubmitting}
+                />
+                Active
+              </label>
+            ) : null}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="source">Source</Label>
-            <Input
-              id="source"
-              value={form.source}
-              onChange={(event) => setField('source', event.target.value)}
-              placeholder="HDFC Smartbuy T&C"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          {isEdit ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(event) => setField('isActive', event.target.checked)}
-                disabled={isSubmitting}
-              />
-              Active
-            </label>
-          ) : null}
-
-          {errorMessage ? (
-            <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
-          ) : null}
-
-          <DialogFooter>
+          <DialogFooter className="mt-0 shrink-0 border-t border-[var(--border)] bg-[var(--card)] px-5 py-4">
+            {errorMessage ? (
+              <p className="mr-auto text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+            ) : null}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
               Cancel
             </Button>
@@ -216,7 +222,8 @@ export {
   EMPTY_RATE_FORM,
   buildSubmitActions,
   cardGroupKey,
+  groupRatesByCard,
   ratesToForm,
   validateRateForm,
 } from './rate-form-utils';
-export type { RateFormState } from './rate-form-utils';
+export type { RateCardGroup, RateFormState } from './rate-form-utils';

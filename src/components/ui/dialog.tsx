@@ -49,18 +49,20 @@ const Dialog = ({ open, onOpenChange, children, contentWrapperClassName }: Dialo
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 overflow-y-auto"
       onClick={() => onOpenChange(false)}
     >
       <div
         className="fixed inset-0 bg-black/50"
         aria-hidden="true"
       />
-      <div
-        className={cn("relative z-50 w-full max-w-lg mx-4", contentWrapperClassName)}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
+      <div className="flex min-h-full items-start justify-center p-4">
+        <div
+          className={cn("relative z-50 w-full max-w-lg", contentWrapperClassName)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {children}
+        </div>
       </div>
     </div>
   )

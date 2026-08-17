@@ -25,9 +25,10 @@ import { Edit, Plus, RefreshCw, Trash2, Coins } from 'lucide-react';
 import {
   EMPTY_RATE_FORM,
   RateFormDialog,
+  RateCardGroup,
   RateFormState,
   buildSubmitActions,
-  cardGroupKey,
+  groupRatesByCard,
   ratesToForm,
   validateRateForm,
 } from './components/rate-form-dialog';
@@ -65,6 +66,7 @@ export default function RewardValueRatesPage() {
   );
 
   const { data: rates, isLoading, error, refetch, isFetching } = useRewardValueRates(queryFilters);
+  const cardGroups = useMemo(() => groupRatesByCard(rates ?? []), [rates]);
   const createRate = useCreateRewardValueRate();
   const updateRate = useUpdateRewardValueRate();
   const deleteRate = useDeleteRewardValueRate();
@@ -76,11 +78,9 @@ export default function RewardValueRatesPage() {
     setDialogOpen(true);
   };
 
-  const openEditDialog = (rate: RewardValueRate) => {
-    const groupKey = cardGroupKey(rate);
-    const groupRates = (rates ?? []).filter((row) => cardGroupKey(row) === groupKey);
-    setEditingGroupKey(groupKey);
-    setForm(ratesToForm(groupRates.length > 0 ? groupRates : [rate]));
+  const openEditDialog = (group: RateCardGroup) => {
+    setEditingGroupKey(group.key);
+    setForm(ratesToForm(group.rates));
     setFormError(null);
     setDialogOpen(true);
   };
@@ -125,16 +125,23 @@ export default function RewardValueRatesPage() {
     }
   };
 
-  const handleDelete = async (rate: RewardValueRate) => {
-    const label = `${rate.bankName}${rate.cardName ? ` · ${rate.cardName}` : ''} · ${REWARD_MODE_LABELS[rate.mode]}`;
-    if (!confirm(`Delete rate for ${label}?`)) return;
+  const handleDeleteGroup = async (group: RateCardGroup) => {
+    const label = `${group.bankName}${group.cardName ? ` · ${group.cardName}` : ''}`;
+    if (!confirm(`Delete all ${group.rates.length} rate(s) for ${label}?`)) return;
 
     try {
-      await deleteRate.mutateAsync(rate.id);
+      for (const rate of group.rates) {
+        await deleteRate.mutateAsync(rate.id);
+      }
     } catch (deleteError) {
       alert(getErrorMessage(deleteError));
     }
   };
+
+  function formatModeLine(rate: RewardValueRate): string {
+    const min = rate.minPoints != null ? ` · min ${rate.minPoints.toLocaleString('en-IN')}` : '';
+    return `${REWARD_MODE_LABELS[rate.mode]} ₹${formatValuePerPoint(rate.valuePerPoint)}${min}`;
+  }
 
   const isSubmitting = createRate.isPending || updateRate.isPending || deleteRate.isPending;
 
@@ -198,7 +205,8 @@ export default function RewardValueRatesPage() {
                 Rates
               </CardTitle>
               <CardDescription>
-                {rates?.length ?? 0} rate{(rates?.length ?? 0) === 1 ? '' : 's'} loaded
+                {cardGroups.length} card{cardGroups.length === 1 ? '' : 's'}
+                {rates?.length ? ` · ${rates.length} mode rate${rates.length === 1 ? '' : 's'} stored` : ''}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -210,7 +218,7 @@ export default function RewardValueRatesPage() {
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
                   Failed to load rates: {getErrorMessage(error)}
                 </div>
-              ) : !rates?.length ? (
+              ) : !cardGroups.length ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
                   <Coins className="h-10 w-10 text-[var(--muted-foreground)]" />
                   <p className="text-sm font-medium text-[var(--foreground)]">No rates yet</p>
@@ -229,9 +237,7 @@ export default function RewardValueRatesPage() {
                       <TableRow>
                         <TableHead>Bank</TableHead>
                         <TableHead>Card</TableHead>
-                        <TableHead>Mode</TableHead>
-                        <TableHead>Value / point</TableHead>
-                        <TableHead>Min points</TableHead>
+                        <TableHead>Redemption modes</TableHead>
                         <TableHead>Effective</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Source</TableHead>
@@ -239,45 +245,59 @@ export default function RewardValueRatesPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rates.map((rate) => (
-                        <TableRow key={rate.id}>
-                          <TableCell className="font-medium">{rate.bankName}</TableCell>
-                          <TableCell>{rate.cardName ?? 'All cards'}</TableCell>
-                          <TableCell>{REWARD_MODE_LABELS[rate.mode]}</TableCell>
-                          <TableCell>₹{formatValuePerPoint(rate.valuePerPoint)}</TableCell>
-                          <TableCell>{rate.minPoints ?? '—'}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {formatDate(rate.effectiveFrom)}
-                            {rate.effectiveTo ? ` → ${formatDate(rate.effectiveTo)}` : ''}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={rate.isActive ? 'default' : 'secondary'}>
-                              {rate.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="max-w-[180px] truncate">{rate.source ?? '—'}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditDialog(rate)}
-                                title="Edit all modes for this card"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => void handleDelete(rate)}
-                                disabled={deleteRate.isPending}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {cardGroups.map((group) => {
+                        const primary = group.rates[0];
+                        const allActive = group.rates.every((rate) => rate.isActive);
+
+                        return (
+                          <TableRow key={group.key}>
+                            <TableCell className="align-top font-medium">{group.bankName}</TableCell>
+                            <TableCell className="align-top">{group.cardName ?? 'All cards'}</TableCell>
+                            <TableCell className="align-top min-w-[260px]">
+                              <ul className="space-y-1 text-sm">
+                                {group.rates.map((rate) => (
+                                  <li key={rate.id} className="text-[var(--foreground)]">
+                                    {formatModeLine(rate)}
+                                  </li>
+                                ))}
+                              </ul>
+                            </TableCell>
+                            <TableCell className="align-top whitespace-nowrap">
+                              {formatDate(primary.effectiveFrom)}
+                              {primary.effectiveTo ? ` → ${formatDate(primary.effectiveTo)}` : ''}
+                            </TableCell>
+                            <TableCell className="align-top">
+                              <Badge variant={allActive ? 'default' : 'secondary'}>
+                                {allActive ? 'Active' : 'Partial'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="align-top max-w-[180px] truncate">
+                              {primary.source ?? '—'}
+                            </TableCell>
+                            <TableCell className="align-top text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => openEditDialog(group)}
+                                  title="Edit all modes for this card"
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void handleDeleteGroup(group)}
+                                  disabled={deleteRate.isPending}
+                                  title="Delete all modes for this card"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
