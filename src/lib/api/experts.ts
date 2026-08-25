@@ -14,9 +14,16 @@ function buildPayload(form: ExpertFormData) {
     name: form.name,
     lastName: form.lastName || null,
     photo: form.photo || null,
+    headline: form.headline || null,
+    pitch: form.pitch || null,
     specialisation: form.specialisation.map((s) => s.trim()).filter(Boolean),
     city: form.city,
+    cities: form.cities
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean),
     bio: form.bio,
+    email: form.email || null,
     feeModels: form.feeModels.map((f) => f.trim()).filter(Boolean),
     trialSession: form.trialSession,
     certification: form.certification.map((c) => c.trim()).filter(Boolean),

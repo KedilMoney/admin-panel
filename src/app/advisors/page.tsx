@@ -34,9 +34,13 @@ const EMPTY_FORM: ExpertFormData = {
   name: '',
   lastName: '',
   photo: '',
+  headline: '',
+  pitch: '',
   specialisation: [],
   city: '',
+  cities: '',
   bio: '',
+  email: '',
   feeModels: [],
   trialSession: 'NONE',
   certification: [],
@@ -64,9 +68,13 @@ function expertToForm(expert: Expert): ExpertFormData {
     name: expert.name,
     lastName: expert.lastName || '',
     photo: expert.photo || '',
+    headline: expert.headline || '',
+    pitch: expert.pitch || '',
     specialisation: expert.specialisation || [],
     city: expert.city,
+    cities: (expert.cities || []).join(', ') || expert.city,
     bio: expert.bio,
+    email: expert.email || '',
     feeModels: expert.feeModels || [],
     trialSession: expert.trialSession || 'NONE',
     certification: expert.certification || [],
@@ -509,8 +517,20 @@ export default function AdvisorsPage() {
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="headline">Headline</Label>
+                    <Input id="headline" value={form.headline} onChange={(e) => set('headline', e.target.value)} disabled={isSubmitting} placeholder="Investments & insurance" />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="city">City *</Label>
                     <Input id="city" value={form.city} onChange={(e) => set('city', e.target.value)} required disabled={isSubmitting} placeholder="e.g. Chennai / Online / Pan India" />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="cities">Cities (comma-separated)</Label>
+                    <Input id="cities" value={form.cities} onChange={(e) => set('cities', e.target.value)} disabled={isSubmitting} placeholder="Madurai, Chennai" />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label htmlFor="pitch">Card pitch</Label>
+                    <Input id="pitch" value={form.pitch} onChange={(e) => set('pitch', e.target.value)} disabled={isSubmitting} placeholder="One sentence for the listing card" />
                   </div>
                   <div className="space-y-2 col-span-2">
                     <Label htmlFor="bio">Bio * <span className="text-xs text-[var(--muted-foreground)]">(2–3 sentences)</span></Label>
@@ -655,6 +675,10 @@ export default function AdvisorsPage() {
               <div>
                 <h3 className="text-sm font-semibold text-[var(--muted-foreground)] uppercase tracking-wide mb-3">Contact</h3>
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" value={form.email} onChange={(e) => set('email', e.target.value)} disabled={isSubmitting} placeholder="hello@advisor.in" />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone <span className="text-xs text-[var(--muted-foreground)]">(optional)</span></Label>
                     <Input id="phone" value={form.phone} onChange={(e) => set('phone', e.target.value)} disabled={isSubmitting} placeholder="+91 98765 43210" />
