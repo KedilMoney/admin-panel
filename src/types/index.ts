@@ -155,9 +155,14 @@ export interface Expert {
   name: string;
   lastName?: string | null;
   photo?: string | null;
+  slug?: string;
+  headline?: string;
+  pitch?: string;
   specialisation: string[];
   city: string;
+  cities?: string[];
   bio: string;
+  email?: string | null;
   feeModels: string[];
   trialSession: TrialSession;
   certification: string[];
@@ -174,6 +179,7 @@ export interface Expert {
   facebook?: string | null;
   youtube?: string | null;
   isActive: boolean;
+  status?: string;
   agency?: Agency | null;
   createdAt: string;
   updatedAt: string;
@@ -189,9 +195,13 @@ export interface ExpertFormData {
   name: string;
   lastName: string;
   photo: string;
+  headline: string;
+  pitch: string;
   specialisation: string[];
   city: string;
+  cities: string;
   bio: string;
+  email: string;
   feeModels: string[];
   trialSession: TrialSession;
   certification: string[];
