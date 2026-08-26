@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { feesFromExpert, feesToPayload } from "./fees.ts";
-import { parseAdvisorCredentials, validCredentials } from "./credentials.ts";
+import { issuerSelectValue, parseAdvisorCredentials, validCredentials } from "./credentials.ts";
 
 describe("feesToPayload", () => {
   it("builds feeRows, feeModels, and min/max from the three fee inputs", () => {
@@ -50,18 +50,18 @@ describe("parseAdvisorCredentials", () => {
       [{ name: "NISM", meta: "Series X-A" }],
       [{ label: "SEBI", value: "INA000012345" }]
     );
-    assert.equal(validCredentials(rows).length, 1);
-    assert.equal(rows[0].issuer, "Other");
-    assert.equal(rows[1].issuer, "SEBI");
+    assert.equal(validCredentials(rows).length, 2);
+    assert.equal(rows[0].issuer, "NISM");
     assert.equal(rows[1].number, "INA000012345");
   });
 
-  it("maps unknown issuers to Other so the dropdown can show them", () => {
+  it("keeps unknown issuers so Others can show the original name", () => {
     const rows = parseAdvisorCredentials([
       { issuer: "NISM Mutual Fund Certified", role: "NISM Mutual Fund Certified" },
       { issuer: "IRDAI", role: "Insurance Advisor" },
     ]);
-    assert.equal(rows[0].issuer, "Other");
+    assert.equal(issuerSelectValue(rows[0].issuer), "Other");
+    assert.equal(rows[0].issuer, "NISM Mutual Fund Certified");
     assert.equal(rows[1].issuer, "IRDAI");
   });
 });
