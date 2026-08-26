@@ -307,7 +307,7 @@ export default function AdvisorsPage() {
           </Card>
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={closeDialog} contentWrapperClassName="max-w-[800px]">
+        <Dialog open={dialogOpen} onOpenChange={closeDialog} contentWrapperClassName="max-w-5xl">
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>

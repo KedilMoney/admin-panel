@@ -112,11 +112,3 @@ export function parseAdvisorCredentials(
 export function emptyCredential(id: string): Credential {
   return { id, issuer: "", role: "", number: "" };
 }
-
-export function selectIssuerValue(issuer: string): string {
-  if (!issuer) return "";
-  if (CREDENTIAL_ISSUERS.includes(issuer as (typeof CREDENTIAL_ISSUERS)[number]) && issuer !== "Other") {
-    return issuer;
-  }
-  return issuer ? "Other" : "";
-}
