@@ -8,13 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatDateTime } from '@/lib/utils';
 import { draftAdvisorName } from '@/lib/advisors/drafts';
-import { useCreateExpertDraft, useExpertDrafts, useMarkDraftSent } from '@/lib/hooks/useExperts';
-import { Copy, Mail, Plus } from 'lucide-react';
+import { useCreateExpertDraft, useDeleteExpertDraft, useExpertDrafts, useMarkDraftSent } from '@/lib/hooks/useExperts';
+import { Copy, Mail, Plus, Trash2 } from 'lucide-react';
 
 export function AdvisorDraftsPanel() {
   const { data: drafts, isLoading, refetch } = useExpertDrafts();
   const createDraft = useCreateExpertDraft();
   const markSent = useMarkDraftSent();
+  const deleteDraft = useDeleteExpertDraft();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [payloadText, setPayloadText] = useState('{\n  "name": "",\n  "email": ""\n}');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -130,6 +131,19 @@ export function AdvisorDraftsPanel() {
                           onClick={() => markSent.mutate(draft.id)}
                         >
                           <Mail className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2"
+                          title="Delete draft"
+                          disabled={deleteDraft.isPending}
+                          onClick={() => {
+                            if (!confirm(`Delete draft for "${draftAdvisorName(draft.payload)}"? This cannot be undone.`)) return;
+                            deleteDraft.mutate(draft.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     </TableCell>
