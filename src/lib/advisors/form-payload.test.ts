@@ -50,8 +50,18 @@ describe("parseAdvisorCredentials", () => {
       [{ name: "NISM", meta: "Series X-A" }],
       [{ label: "SEBI", value: "INA000012345" }]
     );
-    assert.equal(validCredentials(rows).length, 2);
-    assert.equal(rows[0].issuer, "NISM");
+    assert.equal(validCredentials(rows).length, 1);
+    assert.equal(rows[0].issuer, "Other");
+    assert.equal(rows[1].issuer, "SEBI");
     assert.equal(rows[1].number, "INA000012345");
+  });
+
+  it("maps unknown issuers to Other so the dropdown can show them", () => {
+    const rows = parseAdvisorCredentials([
+      { issuer: "NISM Mutual Fund Certified", role: "NISM Mutual Fund Certified" },
+      { issuer: "IRDAI", role: "Insurance Advisor" },
+    ]);
+    assert.equal(rows[0].issuer, "Other");
+    assert.equal(rows[1].issuer, "IRDAI");
   });
 });
