@@ -55,6 +55,15 @@ function asText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+export function issuerSelectValue(issuer: string): string {
+  const trimmed = issuer.trim();
+  if (!trimmed) return "";
+  if (CREDENTIAL_ISSUERS.includes(trimmed as (typeof CREDENTIAL_ISSUERS)[number])) {
+    return trimmed;
+  }
+  return "Other";
+}
+
 export function parseAdvisorCredentials(
   rawCredentials: unknown,
   rawRegistrations?: unknown
@@ -69,7 +78,7 @@ export function parseAdvisorCredentials(
     if (!issuer && !role) continue;
     fromNew.push({
       id: asText(record.id) || `legacy-${index}`,
-      issuer,
+      issuer: issuerSelectValue(issuer),
       role,
       ...(asText(record.number) ? { number: asText(record.number) } : {}),
     });
@@ -86,7 +95,7 @@ export function parseAdvisorCredentials(
     const issuer = asText(record.name);
     const role = asText(record.meta) || issuer;
     if (!issuer) continue;
-    fromLegacyCreds.push({ id: `legacy-${index}`, issuer, role });
+    fromLegacyCreds.push({ id: `legacy-${index}`, issuer: issuerSelectValue(issuer), role });
   }
 
   const fromLegacyRegs: Credential[] = [];
@@ -99,7 +108,7 @@ export function parseAdvisorCredentials(
     if (!role && !number) continue;
     fromLegacyRegs.push({
       id: `legacy-reg-${index}`,
-      issuer: role,
+      issuer: issuerSelectValue(role),
       role: role || "Registration",
       ...(number ? { number } : {}),
     });
