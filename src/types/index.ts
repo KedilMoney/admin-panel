@@ -190,6 +190,7 @@ export interface Expert {
   instagram?: string | null;
   facebook?: string | null;
   youtube?: string | null;
+  consentAt?: string | null;
   isActive: boolean;
   status?: string;
   agency?: Agency | null;

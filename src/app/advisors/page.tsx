@@ -2,16 +2,18 @@
 
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { useExperts, useCreateExpert, useUpdateExpert, useToggleExpert, useDeleteExpert } from '@/lib/hooks/useExperts';
+import { useExperts, useCreateExpert, useUpdateExpert, useToggleExpert, useDeleteExpert, usePublishExpert } from '@/lib/hooks/useExperts';
 import { AdvisorFormFields } from '@/components/advisors/advisor-form-fields';
+import { AdvisorDraftsPanel } from '@/components/advisors/drafts-panel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { formatDate } from '@/lib/utils';
+import { formatDate, formatDateTime } from '@/lib/utils';
 import { EMPTY_FORM, expertToForm, validateAdvisorForm } from '@/lib/advisors/form-payload';
-import { Plus, RefreshCw, Edit, Trash2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { canPublishAdvisor } from '@/lib/advisors/drafts';
+import { Plus, RefreshCw, Edit, Trash2, ToggleLeft, ToggleRight, Check } from 'lucide-react';
 import React, { useState, useRef, useEffect } from 'react';
 import { Expert, ExpertFormData } from '@/types';
 import { expertsApi } from '@/lib/api/experts';
@@ -37,6 +39,8 @@ export default function AdvisorsPage() {
   const updateExpert = useUpdateExpert();
   const toggleExpert = useToggleExpert();
   const deleteExpert = useDeleteExpert();
+  const publishExpert = usePublishExpert();
+  const [tab, setTab] = useState<'advisors' | 'drafts'>('advisors');
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingExpert, setEditingExpert] = useState<Expert | null>(null);
@@ -157,6 +161,11 @@ export default function AdvisorsPage() {
     await deleteExpert.mutateAsync(id);
   };
 
+  const handlePublish = async (id: string, name: string) => {
+    if (!confirm(`Publish "${name}" to the public advisor listing?`)) return;
+    await publishExpert.mutateAsync(id);
+  };
+
   if (isLoading) {
     return (
       <AuthGuard>
@@ -182,17 +191,36 @@ export default function AdvisorsPage() {
               <p className="mt-2 text-[var(--muted-foreground)]">Manage the financial advisor directory</p>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant={tab === 'advisors' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTab('advisors')}
+              >
+                Advisors
+              </Button>
+              <Button
+                variant={tab === 'drafts' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTab('drafts')}
+              >
+                Drafts
+              </Button>
               <Button onClick={() => refetch()} variant="outline" size="sm">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
-              <Button onClick={openCreate} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Financial Advisor
-              </Button>
+              {tab === 'advisors' ? (
+                <Button onClick={openCreate} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Financial Advisor
+                </Button>
+              ) : null}
             </div>
           </div>
 
+          {tab === 'drafts' ? (
+            <AdvisorDraftsPanel />
+          ) : (
           <Card>
             <CardHeader className="border-b border-[var(--border)]">
               <div className="flex items-center justify-between">
@@ -213,6 +241,7 @@ export default function AdvisorsPage() {
                     <TableHead>Fee Range</TableHead>
                     <TableHead>Exp</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Consent</TableHead>
                     <TableHead>Added</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -254,9 +283,14 @@ export default function AdvisorsPage() {
                         </TableCell>
                         <TableCell>{expert.experience}y</TableCell>
                         <TableCell>
-                          <Badge variant={expert.isActive ? 'default' : 'secondary'}>
-                            {expert.isActive ? 'Active' : 'Inactive'}
+                          <Badge variant={expert.status === 'PUBLISHED' && expert.isActive ? 'default' : 'secondary'}>
+                            {expert.status || (expert.isActive ? 'Active' : 'Inactive')}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-[var(--muted-foreground)]">
+                            {expert.consentAt ? formatDateTime(expert.consentAt) : '—'}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <span className="text-sm text-[var(--muted-foreground)]">{formatDate(expert.createdAt)}</span>
@@ -266,6 +300,18 @@ export default function AdvisorsPage() {
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openEdit(expert)} title="Edit">
                               <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                             </Button>
+                            {canPublishAdvisor(expert) ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => handlePublish(expert.id, expert.name)}
+                                disabled={publishExpert.isPending}
+                                title="Publish"
+                              >
+                                <Check className="h-4 w-4 text-green-600" />
+                              </Button>
+                            ) : null}
                             <Button
                               variant="ghost" size="sm" className="h-8 w-8 p-0"
                               onClick={() => handleToggle(expert.id)}
@@ -290,7 +336,7 @@ export default function AdvisorsPage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-12">
+                      <TableCell colSpan={12} className="text-center py-12">
                         <div className="flex flex-col items-center gap-2">
                           <p className="text-[var(--muted-foreground)]">No financial advisors yet</p>
                           <Button variant="outline" size="sm" onClick={openCreate} className="mt-2">
@@ -305,6 +351,7 @@ export default function AdvisorsPage() {
               </Table>
             </CardContent>
           </Card>
+          )}
         </div>
 
         <Dialog open={dialogOpen} onOpenChange={closeDialog} contentWrapperClassName="max-w-5xl">
