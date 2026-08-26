@@ -69,9 +69,6 @@ export function validateAdvisorForm(form: ExpertFormData): string {
   if (!form.fixedFee.trim() && !form.auaPercent.trim() && !form.consultationFee.trim()) {
     return "Fill in the ways you actually charge — at least one.";
   }
-  if (form.credentials.some((row) => row.issuer === "Other")) {
-    return "Replace Others with a listed issuer on each credential.";
-  }
   if (validCredentials(form.credentials).length === 0) {
     return "Add at least one credential with an issuer and role.";
   }

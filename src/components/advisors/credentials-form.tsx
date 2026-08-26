@@ -4,6 +4,7 @@ import { Plus, X } from "lucide-react";
 import {
   CREDENTIAL_ISSUERS,
   emptyCredential,
+  issuerSelectValue,
   numberPlaceholder,
   type Credential,
 } from "@/lib/advisors/credentials";
@@ -59,7 +60,7 @@ export function CredentialsForm({
   return (
     <div className="flex flex-col gap-3 pt-3.5">
       <p className="text-[12px] leading-[1.5] text-[var(--muted-foreground)]">
-        Pick the issuer. Anything not in the list shows as Others — choose the matching issuer before saving.
+        Pick the issuer. For anything not listed, choose Others and type the issuer name.
       </p>
 
       <div className="hidden gap-3 px-1 md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_40px]">
@@ -82,10 +83,18 @@ export function CredentialsForm({
         >
           <Field label="Issued by" required>
             <select
-              value={row.issuer || ""}
+              value={issuerSelectValue(row.issuer) || ""}
               disabled={disabled}
               aria-label={`Issued by, row ${index + 1}`}
-              onChange={(e) => patch(row.id, { issuer: e.target.value })}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === "Other") {
+                  const keepCustom = issuerSelectValue(row.issuer) === "Other" && row.issuer !== "Other";
+                  patch(row.id, { issuer: keepCustom ? row.issuer : "Other" });
+                  return;
+                }
+                patch(row.id, { issuer: next });
+              }}
               className={inputClass}
             >
               <option value="">Select</option>
@@ -95,6 +104,16 @@ export function CredentialsForm({
                 </option>
               ))}
             </select>
+            {issuerSelectValue(row.issuer) === "Other" ? (
+              <input
+                value={row.issuer === "Other" ? "" : row.issuer}
+                placeholder="Issuer name"
+                disabled={disabled}
+                aria-label={`Issuer name, row ${index + 1}`}
+                onChange={(e) => patch(row.id, { issuer: e.target.value || "Other" })}
+                className={`${inputClass} mt-1.5`}
+              />
+            ) : null}
           </Field>
           <Field label="Registered as" required>
             <input
@@ -109,7 +128,9 @@ export function CredentialsForm({
           <Field label="Registration number" optional>
             <input
               value={row.number ?? ""}
-              placeholder={numberPlaceholder(row.issuer)}
+              placeholder={numberPlaceholder(
+                issuerSelectValue(row.issuer) === "Other" ? "" : row.issuer
+              )}
               disabled={disabled}
               aria-label={`Registration number, row ${index + 1}`}
               onChange={(e) => patch(row.id, { number: e.target.value })}

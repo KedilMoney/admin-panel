@@ -1,6 +1,7 @@
 export const CREDENTIAL_ISSUERS = [
   "SEBI",
   "AMFI",
+  "NISM",
   "APMI",
   "IRDAI",
   "PFRDA",
@@ -78,7 +79,7 @@ export function parseAdvisorCredentials(
     if (!issuer && !role) continue;
     fromNew.push({
       id: asText(record.id) || `legacy-${index}`,
-      issuer: issuerSelectValue(issuer),
+      issuer,
       role,
       ...(asText(record.number) ? { number: asText(record.number) } : {}),
     });
@@ -95,7 +96,7 @@ export function parseAdvisorCredentials(
     const issuer = asText(record.name);
     const role = asText(record.meta) || issuer;
     if (!issuer) continue;
-    fromLegacyCreds.push({ id: `legacy-${index}`, issuer: issuerSelectValue(issuer), role });
+    fromLegacyCreds.push({ id: `legacy-${index}`, issuer, role });
   }
 
   const fromLegacyRegs: Credential[] = [];
@@ -108,7 +109,7 @@ export function parseAdvisorCredentials(
     if (!role && !number) continue;
     fromLegacyRegs.push({
       id: `legacy-reg-${index}`,
-      issuer: issuerSelectValue(role),
+      issuer: role,
       role: role || "Registration",
       ...(number ? { number } : {}),
     });
