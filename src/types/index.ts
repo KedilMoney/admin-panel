@@ -150,6 +150,14 @@ export interface Agency {
   website?: string | null;
 }
 
+export type AdvisorFeeRow = { label: string; value: string };
+export type AdvisorCredential = {
+  id: string;
+  issuer: string;
+  role: string;
+  number?: string;
+};
+
 export interface Expert {
   id: string;
   name: string;
@@ -163,10 +171,14 @@ export interface Expert {
   cities?: string[];
   bio: string;
   email?: string | null;
+  enquiryFormUrl?: string | null;
   feeModels: string[];
+  feeRows?: AdvisorFeeRow[];
   trialSession: TrialSession;
   certification: string[];
+  credentials?: AdvisorCredential[] | { name?: string; meta?: string }[];
   registrationNo: string[];
+  registrations?: { label: string; value: string }[];
   sessionFeeMin: number;
   sessionFeeMax: number;
   experience: number;
@@ -185,43 +197,29 @@ export interface Expert {
   updatedAt: string;
 }
 
-/**
- * Form-side mirror of Expert. Number fields are strings so the input can be
- * cleared (you can't backspace the last digit when the state is forced to a
- * number — every empty value coerces back to 0). Coerced to numbers in
- * buildPayload before sending to the API.
- */
 export interface ExpertFormData {
   name: string;
-  lastName: string;
   photo: string;
   headline: string;
-  pitch: string;
   specialisation: string[];
-  city: string;
   cities: string;
   bio: string;
   email: string;
-  feeModels: string[];
-  trialSession: TrialSession;
-  certification: string[];
-  registrationNo: string[];
-  sessionFeeMin: string;
-  sessionFeeMax: string;
   experience: string;
-  languages: string[];
+  languages: string;
   phone: string;
   whatsapp: string;
   website: string;
+  enquiryFormUrl: string;
   linkedin: string;
   instagram: string;
   facebook: string;
   youtube: string;
-  hasAgency: boolean;
-  agencyName: string;
-  agencyType: string;
-  agencyDescription: string;
-  agencyWebsite: string;
+  fixedFee: string;
+  auaPercent: string;
+  consultationFee: string;
+  freeSession: "Yes" | "No";
+  credentials: AdvisorCredential[];
 }
 
 export interface MerchantTag {
