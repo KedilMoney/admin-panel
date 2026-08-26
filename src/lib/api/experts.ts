@@ -1,54 +1,10 @@
 import { api } from './client';
 import { Expert, ExpertFormData } from '@/types';
+import { buildPayload } from '@/lib/advisors/form-payload';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB — must match backend multer cap
 
-/**
- * Build the JSON payload sent to /api/experts/create or /update/:id.
- * Photo is expected to be a URL returned by uploadPhoto() — never a base64 data URL.
- * Number fields are coerced from strings here so the form can keep them as
- * strings (needed to allow clearing the input).
- */
-function buildPayload(form: ExpertFormData) {
-  return {
-    name: form.name,
-    lastName: form.lastName || null,
-    photo: form.photo || null,
-    headline: form.headline || null,
-    pitch: form.pitch || null,
-    specialisation: form.specialisation.map((s) => s.trim()).filter(Boolean),
-    city: form.city,
-    cities: form.cities
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean),
-    bio: form.bio,
-    email: form.email || null,
-    feeModels: form.feeModels.map((f) => f.trim()).filter(Boolean),
-    trialSession: form.trialSession,
-    certification: form.certification.map((c) => c.trim()).filter(Boolean),
-    registrationNo: form.registrationNo.map((r) => r.trim()).filter(Boolean),
-    sessionFeeMin: Number(form.sessionFeeMin) || 0,
-    sessionFeeMax: Number(form.sessionFeeMax) || 0,
-    experience: Number(form.experience) || 0,
-    languages: form.languages.map((l) => l.trim()).filter(Boolean),
-    phone: form.phone || null,
-    whatsapp: form.whatsapp || null,
-    website: form.website || null,
-    linkedin: form.linkedin || null,
-    instagram: form.instagram || null,
-    facebook: form.facebook || null,
-    youtube: form.youtube || null,
-    agency: form.hasAgency
-      ? {
-          name: form.agencyName,
-          type: form.agencyType,
-          description: form.agencyDescription || null,
-          website: form.agencyWebsite || null,
-        }
-      : null,
-  };
-}
+export { buildPayload };
 
 export const expertsApi = {
   getAll: async (): Promise<Expert[]> => {
