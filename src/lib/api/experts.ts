@@ -83,6 +83,10 @@ export const expertsApi = {
     return response.data.data.draft;
   },
 
+  deleteDraft: async (id: string): Promise<void> => {
+    await api.delete(`/api/experts/drafts/${id}`);
+  },
+
   publish: async (id: string): Promise<Expert> => {
     const response = await api.put<{ expert: Expert }>(`/api/experts/publish/${id}`);
     return response.data.data.expert;

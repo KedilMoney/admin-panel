@@ -81,6 +81,16 @@ export const useMarkDraftSent = () => {
   });
 };
 
+export const useDeleteExpertDraft = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => expertsApi.deleteDraft(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expert-drafts'] });
+    },
+  });
+};
+
 export const usePublishExpert = () => {
   const queryClient = useQueryClient();
   return useMutation({
