@@ -52,3 +52,41 @@ export const useDeleteExpert = () => {
     },
   });
 };
+
+export const useExpertDrafts = () => {
+  return useQuery({
+    queryKey: ['expert-drafts'],
+    queryFn: () => expertsApi.listDrafts(),
+  });
+};
+
+export const useCreateExpertDraft = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ payload, sourceUrl }: { payload: Record<string, unknown>; sourceUrl?: string }) =>
+      expertsApi.createDraft(payload, sourceUrl),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expert-drafts'] });
+    },
+  });
+};
+
+export const useMarkDraftSent = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => expertsApi.markDraftSent(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['expert-drafts'] });
+    },
+  });
+};
+
+export const usePublishExpert = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => expertsApi.publish(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['experts'] });
+    },
+  });
+};

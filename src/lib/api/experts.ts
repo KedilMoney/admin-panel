@@ -61,4 +61,43 @@ export const expertsApi = {
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/experts/delete/${id}`);
   },
+
+  createDraft: async (
+    payload: Record<string, unknown>,
+    sourceUrl?: string
+  ): Promise<{ id: string; token: string; url: string }> => {
+    const response = await api.post<{ id: string; token: string; url: string }>(
+      '/api/experts/drafts',
+      { payload, sourceUrl: sourceUrl || undefined }
+    );
+    return response.data.data;
+  },
+
+  listDrafts: async (): Promise<ExpertDraft[]> => {
+    const response = await api.get<{ drafts: ExpertDraft[] }>('/api/experts/drafts');
+    return response.data.data.drafts;
+  },
+
+  markDraftSent: async (id: string): Promise<ExpertDraft> => {
+    const response = await api.post<{ draft: ExpertDraft }>(`/api/experts/drafts/${id}/sent`);
+    return response.data.data.draft;
+  },
+
+  publish: async (id: string): Promise<Expert> => {
+    const response = await api.put<{ expert: Expert }>(`/api/experts/publish/${id}`);
+    return response.data.data.expert;
+  },
+};
+
+export type ExpertDraft = {
+  id: string;
+  token: string;
+  payload: Record<string, unknown>;
+  sourceUrl: string | null;
+  sentAt: string | null;
+  submittedAt: string | null;
+  expertId: string | null;
+  url?: string;
+  createdAt: string;
+  updatedAt: string;
 };
