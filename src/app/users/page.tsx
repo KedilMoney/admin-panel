@@ -14,6 +14,11 @@ import { formatDate, formatDateTime, formatRelativeTime } from '@/lib/utils';
 import { Users, Activity, TrendingUp, CheckCircle, Eye, RefreshCw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AdminOnboardingUser } from '@/lib/api/admin';
+import {
+  filterUsersBySignupPlatform,
+  platformLabel,
+  type PlatformFilter,
+} from '@/lib/users/platform';
 
 const getOnboardingStatus = (onboarding?: AdminOnboardingUser) => {
   if (!onboarding) {
@@ -66,6 +71,7 @@ export default function UsersPage() {
   const [selectedEmail, setSelectedEmail] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all');
 
   const isLoading = usersLoading || onboardingLoading;
   const error = usersError || onboardingError;
@@ -77,7 +83,9 @@ export default function UsersPage() {
   }, [onboardingUsers]);
 
   const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
+    const byPlatform = filterUsersBySignupPlatform(users, platformFilter);
+
+    return byPlatform.filter((user) => {
       const query = searchQuery.toLowerCase();
       const matchesSearch =
         !query ||
@@ -94,7 +102,7 @@ export default function UsersPage() {
       const status = getOnboardingStatus(onboarding);
       return status.label.toLowerCase() === statusFilter.toLowerCase();
     });
-  }, [users, searchQuery, statusFilter, onboardingByEmail]);
+  }, [users, searchQuery, statusFilter, platformFilter, onboardingByEmail]);
 
   const selectedOnboarding = selectedEmail
     ? onboardingByEmail.get(selectedEmail.toLowerCase())
@@ -232,9 +240,7 @@ export default function UsersPage() {
                 <CardTitle>
                   All Users
                   <span className="ml-2 text-sm font-normal text-gray-500">
-                    {filteredUsers.length !== users.length
-                      ? `Showing ${filteredUsers.length} of ${users.length}`
-                      : `${users.length} total`}
+                    {`${filteredUsers.length} total`}
                   </span>
                 </CardTitle>
                 <div className="flex gap-2">
@@ -247,6 +253,20 @@ export default function UsersPage() {
                       className="pl-9 w-[220px]"
                     />
                   </div>
+                  <Select
+                    value={platformFilter}
+                    onValueChange={(value) => setPlatformFilter(value as PlatformFilter)}
+                  >
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="All platforms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All platforms</SelectItem>
+                      <SelectItem value="Web">Web</SelectItem>
+                      <SelectItem value="Android">Android</SelectItem>
+                      <SelectItem value="iOS">iOS</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[160px]">
                       <SelectValue placeholder="All statuses" />
@@ -269,7 +289,8 @@ export default function UsersPage() {
                     <TableRow>
                       <TableHead>User</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Country</TableHead>
+                      <TableHead>Signed up on</TableHead>
+                      <TableHead>Last used</TableHead>
                       <TableHead>Signed Up</TableHead>
                       <TableHead>Last Login</TableHead>
                       <TableHead>Status</TableHead>
@@ -295,7 +316,12 @@ export default function UsersPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-sm">{user.email}</TableCell>
-                            <TableCell className="text-sm">{user.country || '-'}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{platformLabel(user.signupPlatform)}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{platformLabel(user.lastPlatform)}</Badge>
+                            </TableCell>
                             <TableCell className="text-sm">
                               {user.createdAt ? formatDate(user.createdAt) : '-'}
                             </TableCell>
@@ -327,7 +353,7 @@ export default function UsersPage() {
                       })
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-gray-500">
+                        <TableCell colSpan={9} className="text-center text-gray-500">
                           No users found
                         </TableCell>
                       </TableRow>
