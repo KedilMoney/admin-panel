@@ -12,6 +12,8 @@ export interface User {
   lastLoginAt?: string;
   onboardingCompleted?: boolean;
   isActive?: boolean;
+  signupPlatform: 'Web' | 'Android' | 'iOS' | 'Other' | null;
+  lastPlatform: 'Web' | 'Android' | 'iOS' | 'Other' | null;
 }
 
 export interface BankMaster {
