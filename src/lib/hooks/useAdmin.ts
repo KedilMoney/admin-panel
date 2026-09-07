@@ -27,6 +27,37 @@ export const useCategoryUsage = () => {
   });
 };
 
+export const useCategoryReviewSummary = () => {
+  return useQuery({
+    queryKey: ['admin-category-review-summary'],
+    queryFn: () => adminApi.getCategoryReviewSummary(),
+  });
+};
+
+export const useCategoryReview = (
+  categoryName: string | null,
+  sort: 'suspect' | 'date' = 'suspect'
+) => {
+  return useQuery({
+    queryKey: ['admin-category-review', categoryName, sort],
+    queryFn: () =>
+      adminApi.getCategoryReview({
+        categoryName: categoryName as string,
+        limit: 200,
+        sort,
+      }),
+    enabled: Boolean(categoryName),
+  });
+};
+
+export const useCategoryReviewDiagnosis = (transactionId: string | null) => {
+  return useQuery({
+    queryKey: ['admin-category-review-diagnosis', transactionId],
+    queryFn: () => adminApi.getCategoryReviewDiagnosis(transactionId as string),
+    enabled: Boolean(transactionId),
+  });
+};
+
 export const useGroupUsage = () => {
   return useQuery({
     queryKey: ['admin-group-usage'],

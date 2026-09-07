@@ -1,474 +1,271 @@
 'use client';
 
+import { Fragment, useMemo, useState } from 'react';
+import { Download, RefreshCw } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/admin-layout';
 import { AuthGuard } from '@/components/auth/auth-guard';
-import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from '@/lib/hooks/useCategories';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { formatDate, formatCurrency } from '@/lib/utils';
-import { Plus, Trash2, RefreshCw, X, Edit, Image as ImageIcon, GripVertical, MoreVertical } from 'lucide-react';
-import { useState, useRef } from 'react';
-import { Category } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useCategoryReview, useCategoryReviewDiagnosis, useCategoryReviewSummary } from '@/lib/hooks/useAdmin';
+import { suspectReasonLabel } from '@/lib/category-review/suspectLabels';
+import { formatWhyPanel } from '@/lib/category-review/whyPanel';
+import { buildCategoryReviewWorkbookBuffer, triggerWorkbookDownload } from '@/lib/category-review/writeXlsx';
+import type { CategoryReviewItem } from '@/lib/category-review/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.kedil.money';
+function formatInr(amount: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
-export default function CategoriesPage() {
-  const { data: categoriesData, isLoading, error, refetch } = useCategories();
-  const createCategory = useCreateCategory();
-  const updateCategory = useUpdateCategory();
-  const deleteCategory = useDeleteCategory();
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [categoryForm, setCategoryForm] = useState({
-    name: '',
-    groupId: '',
-  });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const resetForm = () => {
-    setCategoryForm({ name: '', groupId: '' });
-    setImageFile(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      // Create preview URL
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', categoryForm.name);
-      if (categoryForm.groupId) formDataToSend.append('groupId', categoryForm.groupId);
-      if (imageFile) formDataToSend.append('blob_image', imageFile);
-
-      await createCategory.mutateAsync(formDataToSend);
-      setShowCreateForm(false);
-      resetForm();
-    } catch (error) {
-      console.error('Error creating category:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingCategory) return;
-    setIsSubmitting(true);
-
-    try {
-      const formDataToSend = new FormData();
-      formDataToSend.append('name', categoryForm.name);
-      if (imageFile) formDataToSend.append('blob_image', imageFile);
-
-      await updateCategory.mutateAsync({
-        id: editingCategory.id,
-        data: formDataToSend,
-      });
-      setEditingCategory(null);
-      resetForm();
-    } catch (error) {
-      console.error('Error updating category:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleEditClick = (category: Category) => {
-    setEditingCategory(category);
-    setCategoryForm({ 
-      name: category.name, 
-      groupId: category.groupId || '' 
-    });
-    // Set preview from existing image
-    if (category.imageUrl) {
-      setImagePreview(`${API_BASE_URL}${category.imageUrl}`);
-    } else {
-      setImagePreview(null);
-    }
-    setImageFile(null);
-    setShowCreateForm(false);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this category?')) {
-      try {
-        await deleteCategory.mutateAsync({ id });
-      } catch (error) {
-        console.error('Error deleting category:', error);
-      }
-    }
-  };
-
-  const getImageUrl = (category: Category): string | undefined => {
-    if (category.imageUrl) {
-      return `${API_BASE_URL}${category.imageUrl}`;
-    }
-    return undefined;
-  };
-
-  const allCategories = categoriesData?.groups?.flatMap(group => 
-    (group.categories || []).map(cat => ({ ...cat, groupName: group.name }))
-  ) || [];
+function WhyPanel({ item }: { item: CategoryReviewItem }) {
+  const { data, isLoading, error } = useCategoryReviewDiagnosis(item.transactionId);
+  const view = formatWhyPanel(item, data);
 
   if (isLoading) {
-    return (
-      <AuthGuard>
-        <AdminLayout>
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent"></div>
-              <p className="mt-4 text-[var(--muted-foreground)]">Loading categories...</p>
-            </div>
-          </div>
-        </AdminLayout>
-      </AuthGuard>
-    );
+    return <p className="text-sm text-[var(--muted-foreground)]">Loading diagnosis…</p>;
   }
+  if (error) {
+    return <p className="text-sm text-red-600">Could not load diagnosis.</p>;
+  }
+
+  return (
+    <div className="space-y-2 text-sm">
+      <p className="font-medium text-[var(--foreground)]">{view.headline}</p>
+      <p className="text-[var(--muted-foreground)]">
+        {view.rung}
+        {view.confidence != null ? ` · confidence ${view.confidence}` : ''}
+        {view.shopName ? ` · shop ${view.shopName}` : ''}
+      </p>
+      {view.descriptor ? (
+        <p className="break-all text-[var(--foreground)]">
+          <span className="text-[var(--muted-foreground)]">Descriptor: </span>
+          {view.descriptor}
+        </p>
+      ) : null}
+      {view.patternCategory ? (
+        <p>Merchant master category: {view.patternCategory}</p>
+      ) : null}
+      {view.mapping ? (
+        <p>
+          Mapping {view.mapping.categoryId ?? 'unknown'}
+          {view.mapping.confirmed ? ' · confirmed' : ''}
+          {view.mapping.userCorrected ? ' · user corrected' : ''}
+        </p>
+      ) : null}
+      {view.crowd ? (
+        <p>
+          Profile {view.crowd.canonicalName ?? 'unknown'}
+          {view.crowd.crowdPoints != null ? ` · ${view.crowd.crowdPoints} crowd points` : ''}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export default function CategoryReviewPage() {
+  const { data: summary, isLoading: summaryLoading, error: summaryError, refetch: refetchSummary } =
+    useCategoryReviewSummary();
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const categories = useMemo(() => summary?.categories ?? [], [summary]);
+  const filteredCategories = useMemo(() => {
+    const q = pickerQuery.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter((row) => row.name.toLowerCase().includes(q));
+  }, [categories, pickerQuery]);
+
+  const selected = categories.find((row) => row.name === selectedName) ?? null;
+  const { data: review, isLoading: reviewLoading, error: reviewError, refetch: refetchReview } =
+    useCategoryReview(selectedName, 'suspect');
+  const items = review?.items ?? [];
+
+  const handleExport = async () => {
+    if (!selectedName || items.length === 0) return;
+    setExporting(true);
+    try {
+      const buffer = await buildCategoryReviewWorkbookBuffer({
+        categoryName: selectedName,
+        items,
+        summary: {
+          transactionCount: selected?.transactionCount ?? items.length,
+          userCount: selected?.userCount ?? new Set(items.map((row) => row.userEmail)).size,
+          suspectCount: selected?.suspectCount ?? items.filter((row) => row.suspectScore > 0).length,
+        },
+      });
+      triggerWorkbookDownload(buffer, `category-review-${selectedName.replace(/\s+/g, '-').toLowerCase()}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <AuthGuard>
       <AdminLayout>
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-[var(--foreground)]">Categories</h1>
-              <p className="mt-2 text-[var(--muted-foreground)]">Manage budget categories</p>
+              <h1 className="text-3xl font-bold text-[var(--foreground)]">Category Review</h1>
+              <p className="mt-2 text-[var(--muted-foreground)]">
+                Read-only audit of auto-categorisation. Mistakes sort to the top. Nothing here can change a
+                transaction.
+              </p>
             </div>
             <div className="flex gap-2">
-              <Button onClick={() => refetch()} variant="outline" size="sm">
-                <RefreshCw className="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void refetchSummary();
+                  void refetchReview();
+                }}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
                 Refresh
               </Button>
-              <Button onClick={() => { setShowCreateForm(true); resetForm(); }} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Category
+              <Button onClick={() => void handleExport()} disabled={!selectedName || items.length === 0 || exporting}>
+                <Download className="mr-2 h-4 w-4" />
+                {exporting ? 'Exporting…' : 'Export'}
               </Button>
             </div>
           </div>
 
-          {showCreateForm && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Create New Category</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setShowCreateForm(false); resetForm(); }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleCreate} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Category Name *</Label>
-                    <Input
-                      id="name"
-                      value={categoryForm.name}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                      required
-                      disabled={isSubmitting}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="groupId">Group ID (Optional)</Label>
-                    <Input
-                      id="groupId"
-                      value={categoryForm.groupId}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, groupId: e.target.value })}
-                      disabled={isSubmitting}
-                      placeholder="Leave empty to auto-create group"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="image">Category Logo (Image)</Label>
-                    <div className="space-y-3">
-                      <Input
-                        ref={fileInputRef}
-                        id="image"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        disabled={isSubmitting}
+          <Card>
+            <CardHeader>
+              <CardTitle>Categories</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                placeholder="Filter category names"
+                value={pickerQuery}
+                onChange={(event) => setPickerQuery(event.target.value)}
+              />
+              {summaryLoading ? (
+                <p className="text-sm text-[var(--muted-foreground)]">Loading categories…</p>
+              ) : summaryError ? (
+                <p className="text-sm text-red-600">Could not load category summary.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Transactions</TableHead>
+                      <TableHead>Users</TableHead>
+                      <TableHead>Suspects</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCategories.map((row) => (
+                      <TableRow
+                        key={row.name}
+                        data-state={row.name === selectedName ? 'selected' : undefined}
                         className="cursor-pointer"
-                      />
-                      {imagePreview && (
-                        <div className="mt-2">
-                          <p className="text-sm text-[var(--muted-foreground)] mb-2">Preview:</p>
-                          <div className="relative inline-block border-2 border-[var(--border)] rounded-lg overflow-hidden">
-                            <img
-                              src={imagePreview}
-                              alt="Category logo preview"
-                              className="h-32 w-auto object-contain"
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? 'Creating...' : 'Create'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => { setShowCreateForm(false); resetForm(); }}
-                      disabled={isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {editingCategory && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle>Edit Category: {editingCategory.name}</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => { setEditingCategory(null); resetForm(); }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleUpdate} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-name">Category Name *</Label>
-                    <Input
-                      id="edit-name"
-                      value={categoryForm.name}
-                      onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                      required
-                      disabled={isSubmitting || editingCategory.isAutoCreated}
-                    />
-                    {editingCategory.isAutoCreated && (
-                      <p className="text-sm text-orange-500">Auto-created categories cannot be edited.</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-image">Category Logo (Image)</Label>
-                    <div className="space-y-3">
-                      <Input
-                        ref={fileInputRef}
-                        id="edit-image"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageChange}
-                        disabled={isSubmitting || editingCategory.isAutoCreated}
-                        className="cursor-pointer"
-                      />
-                      {imagePreview && (
-                        <div className="mt-2">
-                          <p className="text-sm text-[var(--muted-foreground)] mb-2">Preview:</p>
-                          <div className="relative inline-block border-2 border-[var(--border)] rounded-lg overflow-hidden">
-                            <img
-                              src={imagePreview}
-                              alt="Category logo preview"
-                              className="h-32 w-auto object-contain"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      {!imagePreview && editingCategory.imageUrl && (
-                        <div className="mt-2">
-                          <p className="text-sm text-[var(--muted-foreground)] mb-2">Current Image:</p>
-                          <div className="relative inline-block border-2 border-[var(--border)] rounded-lg overflow-hidden">
-                            <img
-                              src={getImageUrl(editingCategory)}
-                              alt="Current category logo"
-                              className="h-32 w-auto object-contain"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={isSubmitting || editingCategory.isAutoCreated}>
-                      {isSubmitting ? 'Updating...' : 'Update'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => { setEditingCategory(null); resetForm(); }}
-                      disabled={isSubmitting}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
+                        onClick={() => {
+                          setSelectedName(row.name);
+                          setExpandedId(null);
+                        }}
+                      >
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell>{row.transactionCount}</TableCell>
+                        <TableCell>{row.userCount}</TableCell>
+                        <TableCell>{row.suspectCount}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
-            <CardHeader className="border-b border-[var(--border)]">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl">All Categories ({allCategories.length})</CardTitle>
-                <Badge variant="secondary">{allCategories.length}</Badge>
-              </div>
+            <CardHeader>
+              <CardTitle>
+                {selectedName ? `${selectedName} transactions` : 'Select a category'}
+              </CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12"></TableHead>
-                    <TableHead className="w-20">Logo</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Group</TableHead>
-                    <TableHead>Is Global</TableHead>
-                    <TableHead>Allocated</TableHead>
-                    <TableHead>Available</TableHead>
-                    <TableHead>Created At</TableHead>
-                    <TableHead className="w-24 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allCategories.length > 0 ? (
-                    allCategories.map((category) => (
-                      <TableRow key={category.id} className="group">
-                        <TableCell className="cursor-grab active:cursor-grabbing">
-                          <GripVertical className="h-4 w-4 text-[var(--muted-foreground)] opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </TableCell>
-                        <TableCell>
-                          {getImageUrl(category) ? (
-                            <div className="relative h-10 w-10 rounded border border-[var(--border)] overflow-hidden bg-[var(--muted)] flex items-center justify-center">
-                              <img
-                                src={getImageUrl(category) || ''}
-                                alt={category.name}
-                                className="h-full w-full object-contain"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const parent = e.currentTarget.parentElement;
-                                  if (parent) {
-                                    parent.innerHTML = '<div class="flex items-center justify-center h-full"><ImageIcon class="h-5 w-5 text-[var(--muted-foreground)]" /></div>';
-                                  }
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div className="h-10 w-10 rounded border border-[var(--border)] bg-[var(--muted)] flex items-center justify-center">
-                              <ImageIcon className="h-5 w-5 text-[var(--muted-foreground)]" />
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-semibold text-[var(--foreground)]">{category.name}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{category.groupName || '-'}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={category.isGlobal ? "default" : "secondary"}>
-                            {category.isGlobal ? "Global" : "Local"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {category.allocated ? formatCurrency(category.allocated) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {category.available ? formatCurrency(category.available) : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm text-[var(--muted-foreground)]">
-                            {category.createdAt ? formatDate(category.createdAt) : '-'}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1">
-                            {!category.isAutoCreated && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => handleEditClick(category)}
-                                  disabled={updateCategory.isPending}
-                                  title="Edit category"
-                                >
-                                  <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => handleDelete(category.id)}
-                                  disabled={deleteCategory.isPending}
-                                  title="Delete category"
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
-                                </Button>
-                              </>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="More options"
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  ) : (
+            <CardContent>
+              {!selectedName ? (
+                <p className="text-sm text-[var(--muted-foreground)]">
+                  Pick a category above to list every transaction across users.
+                </p>
+              ) : reviewLoading ? (
+                <p className="text-sm text-[var(--muted-foreground)]">Loading transactions…</p>
+              ) : reviewError ? (
+                <p className="text-sm text-red-600">Could not load transactions.</p>
+              ) : items.length === 0 ? (
+                <p className="text-sm text-[var(--muted-foreground)]">No transactions in this category.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12">
-                        <div className="flex flex-col items-center gap-2">
-                          <p className="text-[var(--muted-foreground)]">No categories found</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => { setShowCreateForm(true); resetForm(); }}
-                            className="mt-2"
-                          >
-                            <Plus className="h-4 w-4 mr-2" />
-                            Create your first category
-                          </Button>
-                        </div>
-                      </TableCell>
+                      <TableHead>User</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Descriptor</TableHead>
+                      <TableHead>Decided by</TableHead>
+                      <TableHead>Confidence</TableHead>
+                      <TableHead>Merchant key</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item) => (
+                      <Fragment key={item.transactionId}>
+                        <TableRow
+                          className="cursor-pointer"
+                          onClick={() =>
+                            setExpandedId((current) =>
+                              current === item.transactionId ? null : item.transactionId
+                            )
+                          }
+                        >
+                          <TableCell>{item.userEmail ?? '—'}</TableCell>
+                          <TableCell>{item.date}</TableCell>
+                          <TableCell>{formatInr(item.amount)}</TableCell>
+                          <TableCell className="max-w-xs truncate" title={item.descriptor}>
+                            {item.descriptor}
+                          </TableCell>
+                          <TableCell>{item.decidedBy ?? '—'}</TableCell>
+                          <TableCell>{item.confidence ?? '—'}</TableCell>
+                          <TableCell className="font-mono text-xs">{item.merchantKey ?? '—'}</TableCell>
+                        </TableRow>
+                        {item.suspectReasons.length > 0 ? (
+                          <TableRow key={`${item.transactionId}-reasons`}>
+                            <TableCell colSpan={7}>
+                              <div className="flex flex-wrap gap-2">
+                                {item.suspectReasons.map((reason) => (
+                                  <Badge key={reason} variant="warning">
+                                    {suspectReasonLabel(reason)}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                        {expandedId === item.transactionId ? (
+                          <TableRow key={`${item.transactionId}-why`}>
+                            <TableCell colSpan={7}>
+                              <WhyPanel item={item} />
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {selectedName && review && !reviewLoading ? (
+                <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+                  {review.total} transaction{review.total === 1 ? '' : 's'}
+                  {selected ? ` · ${selected.userCount} users · ${selected.suspectCount} suspects` : ''}
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         </div>

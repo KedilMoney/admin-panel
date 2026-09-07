@@ -38,7 +38,7 @@ const navigation = [
   { name: 'Templates', href: '/templates', icon: LayoutTemplate },
   { name: 'Auto-Cat Lab', href: '/auto-cat-lab', icon: FlaskConical },
   { name: 'Groups', href: '/groups', icon: FolderKanban },
-  { name: 'Categories', href: '/categories', icon: FolderTree },
+  { name: 'Category Review', href: '/categories', icon: FolderTree },
   { name: 'Income Icons', href: '/income-icons', icon: CircleDollarSign },
   { name: 'Icons', href: '/icons', icon: Image },
   { name: 'Financial Advisors', href: '/advisors', icon: GraduationCap },

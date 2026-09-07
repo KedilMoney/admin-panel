@@ -1,4 +1,9 @@
 import { api } from './client';
+import type {
+  CategoryReviewDiagnosis,
+  CategoryReviewList,
+  CategoryReviewSummary,
+} from '@/lib/category-review/types';
 
 export type BudgetTemplateCategoryType = 'need' | 'want' | 'saving';
 
@@ -120,6 +125,28 @@ export const adminApi = {
 
   getCategoryUsage: async (): Promise<NameUsageRow[]> => {
     const response = await api.get<NameUsageRow[]>('/api/admin/category-usage');
+    return response.data.data;
+  },
+
+  getCategoryReviewSummary: async (): Promise<CategoryReviewSummary> => {
+    const response = await api.get<CategoryReviewSummary>('/api/admin/category-review/summary');
+    return response.data.data;
+  },
+
+  getCategoryReview: async (params: {
+    categoryName: string;
+    limit?: number;
+    cursor?: string;
+    sort?: 'suspect' | 'date';
+  }): Promise<CategoryReviewList> => {
+    const response = await api.get<CategoryReviewList>('/api/admin/category-review', { params });
+    return response.data.data;
+  },
+
+  getCategoryReviewDiagnosis: async (transactionId: string): Promise<CategoryReviewDiagnosis> => {
+    const response = await api.get<CategoryReviewDiagnosis>(
+      `/api/admin/category-review/transactions/${encodeURIComponent(transactionId)}/diagnosis`
+    );
     return response.data.data;
   },
 
