@@ -3,14 +3,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
+  CircleSlash,
   Loader2,
   Play,
   RotateCcw,
   Search,
-  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -20,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { useEnricherApply, useEnricherLatest, useEnricherScan } from '@/lib/hooks/useEnricher';
 import type { EnricherDomain, EnricherScanResult, EnricherSuggestion, StoredEnricherScan } from '@/types';
 
@@ -117,6 +115,7 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!latest.data) return;
@@ -129,7 +128,9 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
     setRowStates(hydrateFromStored(latest.data));
   }, [latest.data]);
 
-  const suggestions = report?.suggestions ?? [];
+  const suggestions = (report?.suggestions ?? []).filter(
+    (row) => !dismissedIds.includes(row.suggestionId)
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -164,6 +165,7 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
     setPage(0);
     setError(null);
     setSuccessMessage(null);
+    setDismissedIds([]);
     latest.refetch();
   };
 
@@ -179,6 +181,7 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
         error: stored.error,
       });
       setRowStates(hydrateFromStored(stored));
+      setDismissedIds([]);
       setPage(0);
       await latest.refetch();
     } catch (err) {
@@ -186,22 +189,28 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
     }
   };
 
-  const applySelected = async () => {
+  const submitSelected = async (mode: 'accept' | 'skip') => {
     if (!report) return;
     setError(null);
     setSuccessMessage(null);
 
-    const decisions = selectedSuggestions.map((row) => {
-      const state = rowStates[row.suggestionId];
-      if (state?.useCustom && state.customValue.trim()) {
-        return {
-          suggestionId: row.suggestionId,
-          action: 'custom' as const,
-          customValue: state.customValue.trim(),
-        };
-      }
-      return { suggestionId: row.suggestionId, action: 'accept' as const };
-    });
+    const decisions =
+      mode === 'skip'
+        ? selectedSuggestions.map((row) => ({
+            suggestionId: row.suggestionId,
+            action: 'skip' as const,
+          }))
+        : selectedSuggestions.map((row) => {
+            const state = rowStates[row.suggestionId];
+            if (state?.useCustom && state.customValue.trim()) {
+              return {
+                suggestionId: row.suggestionId,
+                action: 'custom' as const,
+                customValue: state.customValue.trim(),
+              };
+            }
+            return { suggestionId: row.suggestionId, action: 'accept' as const };
+          });
 
     try {
       const result = await apply.mutateAsync({
@@ -214,12 +223,18 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
         ? ` Synced ${sync.displayUpdated} displays, ${sync.categoriesUpdated} categories, ${sync.tagsRefreshed} tags.`
         : '';
       setSuccessMessage(
-        `Applied ${result.applied} suggestion(s). Skipped ${result.skipped}.${syncNote}`
+        mode === 'skip'
+          ? `Skipped ${result.skipped} suggestion(s). They stay off this queue for 30 days.`
+          : `Applied ${result.applied} suggestion(s). Skipped ${result.skipped}.${syncNote}`
       );
       if (result.errors.length > 0) {
         setError(result.errors.map((row) => `${row.suggestionId}: ${row.message}`).join(' '));
       }
-      await latest.refetch();
+      setDismissedIds((prev) => [
+        ...prev,
+        ...selectedSuggestions.map((row) => row.suggestionId),
+      ]);
+      setPage(0);
     } catch (err) {
       setError(formatSubmitError(err));
     }
@@ -272,17 +287,31 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
             Run scan now
           </Button>
           {report ? (
-            <Button
-              onClick={applySelected}
-              disabled={isPending || selectedSuggestions.length === 0}
-            >
-              {apply.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-              )}
-              Apply {selectedSuggestions.length} selected
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => submitSelected('skip')}
+                disabled={isPending || selectedSuggestions.length === 0}
+              >
+                {apply.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CircleSlash className="mr-2 h-4 w-4" />
+                )}
+                Skip {selectedSuggestions.length} selected
+              </Button>
+              <Button
+                onClick={() => submitSelected('accept')}
+                disabled={isPending || selectedSuggestions.length === 0}
+              >
+                {apply.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                )}
+                Apply {selectedSuggestions.length} selected
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
@@ -300,13 +329,10 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
       ) : null}
 
       {report ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5" />
-              Suggestions
-            </CardTitle>
-            <CardDescription>
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-base font-semibold tracking-tight">Suggestions</h3>
+            <p className="mt-1 text-sm text-[var(--muted-foreground)]">
               Scanned {report.summary.scanned} · {report.summary.suggested} to review ·{' '}
               {report.summary.skipped} unchanged
               {report.summary.llmUsed ? ' · LLM active' : ' · extractor fallback'}
@@ -317,211 +343,190 @@ export function EnricherTabWorkspace({ domain }: { domain: EnricherDomain }) {
                   remaining · {report.queue.skipped} skipped · {report.queue.resolved} resolved
                 </>
               ) : null}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
-              <Input
-                value={search}
-                onChange={(event) => {
-                  setSearch(event.target.value);
-                  setPage(0);
-                }}
-                placeholder="Search merchant, raw text, issue…"
-                className="pl-9"
-              />
-            </div>
+            </p>
+          </div>
 
-            {filtered.length === 0 ? (
-              <p className="text-sm text-[var(--muted-foreground)]">
-                {search.trim()
-                  ? `No matches for "${search.trim()}". ${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} in this scan — clear search to browse.`
-                  : 'No suggestions in this scan. Try again later as new messy merchants appear.'}
-              </p>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted-foreground)]">
-                  <span>{selectedSuggestions.length} selected</span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setRowStates((prev) => {
-                        const next = { ...prev };
-                        for (const row of pageItems) {
-                          next[row.suggestionId] = {
-                            ...(next[row.suggestionId] ?? createRowState(row)),
-                            selected: true,
-                          };
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    Select page
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setRowStates((prev) => {
-                        const next = { ...prev };
-                        for (const row of filtered) {
-                          next[row.suggestionId] = {
-                            ...(next[row.suggestionId] ?? createRowState(row)),
-                            selected: false,
-                          };
-                        }
-                        return next;
-                      });
-                    }}
-                  >
-                    Clear all
-                  </Button>
-                </div>
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted-foreground)]" />
+            <Input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setPage(0);
+              }}
+              placeholder="Search merchant, raw text…"
+              className="pl-9"
+            />
+          </div>
 
-                <div className="overflow-x-auto rounded-lg border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10" />
-                        <TableHead>Raw narration</TableHead>
-                        <TableHead>{copy.currentLabel}</TableHead>
-                        <TableHead>{copy.suggestedLabel}</TableHead>
-                        <TableHead>Confidence</TableHead>
-                        <TableHead>Reasoning</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {pageItems.map((row) => {
-                        const state = rowStates[row.suggestionId] ?? createRowState(row);
-                        return (
-                          <TableRow key={row.suggestionId}>
-                            <TableCell>
+          {filtered.length === 0 ? (
+            <p className="text-sm text-[var(--muted-foreground)]">
+              {search.trim()
+                ? `No matches for "${search.trim()}". ${suggestions.length} suggestion${suggestions.length === 1 ? '' : 's'} in this scan — clear search to browse.`
+                : 'No suggestions in this scan. Try again later as new messy merchants appear.'}
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                <span>{selectedSuggestions.length} selected</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRowStates((prev) => {
+                      const next = { ...prev };
+                      for (const row of pageItems) {
+                        next[row.suggestionId] = {
+                          ...(next[row.suggestionId] ?? createRowState(row)),
+                          selected: true,
+                        };
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  Select page
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setRowStates((prev) => {
+                      const next = { ...prev };
+                      for (const row of filtered) {
+                        next[row.suggestionId] = {
+                          ...(next[row.suggestionId] ?? createRowState(row)),
+                          selected: false,
+                        };
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  Clear all
+                </Button>
+              </div>
+
+              <Table framed={false}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10" />
+                    <TableHead>{copy.currentLabel}</TableHead>
+                    <TableHead>Raw narration</TableHead>
+                    <TableHead>{copy.suggestedLabel}</TableHead>
+                    <TableHead>Confidence</TableHead>
+                    <TableHead>Reasoning</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageItems.map((row) => {
+                    const state = rowStates[row.suggestionId] ?? createRowState(row);
+                    return (
+                      <TableRow key={row.suggestionId}>
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            checked={state.selected}
+                            onChange={(event) =>
+                              toggleRow(row.suggestionId, event.target.checked)
+                            }
+                            aria-label={`Select ${row.suggestionId}`}
+                          />
+                        </TableCell>
+                        <TableCell className="max-w-xs whitespace-normal break-words font-medium">
+                          {row.currentValue}
+                        </TableCell>
+                        <TableCell className="max-w-md">
+                          <p className="whitespace-normal break-all font-mono text-xs">
+                            {row.rawDescriptor}
+                          </p>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="font-medium">{row.suggestedValue}</p>
+                            {row.suggestedTag ? (
+                              <p className="text-xs text-[var(--muted-foreground)]">
+                                + tag {row.suggestedTag}
+                              </p>
+                            ) : null}
+                            <label className="flex items-center gap-2 text-xs">
                               <input
                                 type="checkbox"
-                                checked={state.selected}
+                                checked={state.useCustom}
                                 onChange={(event) =>
-                                  toggleRow(row.suggestionId, event.target.checked)
+                                  setRowStates((prev) => ({
+                                    ...prev,
+                                    [row.suggestionId]: {
+                                      ...state,
+                                      useCustom: event.target.checked,
+                                    },
+                                  }))
                                 }
-                                aria-label={`Select ${row.suggestionId}`}
                               />
-                            </TableCell>
-                            <TableCell className="max-w-xs">
-                              <p className="truncate font-mono text-xs" title={row.rawDescriptor}>
-                                {row.rawDescriptor}
-                              </p>
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {row.issues.slice(0, 3).map((issue) => (
-                                  <Badge key={issue} variant="outline" className="text-[10px]">
-                                    {issue}
-                                  </Badge>
-                                ))}
-                                <Badge variant="secondary" className="text-[10px]">
-                                  {row.source}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell>{row.currentValue}</TableCell>
-                            <TableCell>
-                              <div className="space-y-1">
-                                <p className="font-medium">{row.suggestedValue}</p>
-                                {row.suggestedTag ? (
-                                  <p className="text-xs text-[var(--muted-foreground)]">
-                                    + tag {row.suggestedTag}
-                                  </p>
-                                ) : null}
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input
-                                    type="checkbox"
-                                    checked={state.useCustom}
-                                    onChange={(event) =>
-                                      setRowStates((prev) => ({
-                                        ...prev,
-                                        [row.suggestionId]: {
-                                          ...state,
-                                          useCustom: event.target.checked,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                  Custom
-                                </label>
-                                {state.useCustom ? (
-                                  <Input
-                                    value={state.customValue}
-                                    onChange={(event) =>
-                                      setRowStates((prev) => ({
-                                        ...prev,
-                                        [row.suggestionId]: {
-                                          ...state,
-                                          customValue: event.target.value,
-                                        },
-                                      }))
-                                    }
-                                    className="h-8 text-xs"
-                                  />
-                                ) : null}
-                              </div>
-                            </TableCell>
-                            <TableCell>{formatConfidence(row.confidence)}</TableCell>
-                            <TableCell className="max-w-sm text-xs text-[var(--muted-foreground)]">
-                              {row.reasoning}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                              Custom
+                            </label>
+                            {state.useCustom ? (
+                              <Input
+                                value={state.customValue}
+                                onChange={(event) =>
+                                  setRowStates((prev) => ({
+                                    ...prev,
+                                    [row.suggestionId]: {
+                                      ...state,
+                                      customValue: event.target.value,
+                                    },
+                                  }))
+                                }
+                                className="h-8 text-xs"
+                              />
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatConfidence(row.confidence)}</TableCell>
+                        <TableCell className="max-w-sm whitespace-normal break-words text-xs text-[var(--muted-foreground)]">
+                          {row.reasoning}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
 
-                {pageCount > 1 ? (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={page === 0}
-                      onClick={() => setPage((value) => Math.max(0, value - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-sm text-[var(--muted-foreground)]">
-                      Page {page + 1} of {pageCount}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={page + 1 >= pageCount}
-                      onClick={() => setPage((value) => value + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </CardContent>
-        </Card>
+              {pageCount > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={page === 0}
+                    onClick={() => setPage((value) => Math.max(0, value - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-[var(--muted-foreground)]">
+                    Page {page + 1} of {pageCount}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={page + 1 >= pageCount}
+                    onClick={() => setPage((value) => value + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
       ) : latest.isLoading ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Loading latest scan…</CardTitle>
-            <CardDescription>
-              Showing the most recent nightly or manual scan when available.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          Loading latest scan… showing the most recent nightly or manual scan when available.
+        </p>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Ready to scan</CardTitle>
-            <CardDescription>
-              No saved scan yet for this tab. The nightly job runs at 11:00 PM IST, or use Run
-              scan now for an on-demand refresh.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <p className="text-sm text-[var(--muted-foreground)]">
+          No saved scan yet for this tab. The nightly job runs at 11:00 PM IST, or use Run scan
+          now for an on-demand refresh.
+        </p>
       )}
     </div>
   );
