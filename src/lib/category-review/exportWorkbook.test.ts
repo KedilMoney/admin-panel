@@ -16,6 +16,7 @@ describe("buildExportModel", () => {
           descriptor: "Se/ICIC/raisesecur/Mutu 0097695162091 AT 40623",
           decidedBy: "LLM",
           confidence: 0.7,
+          categoryAssignmentScore: 1,
           merchantKey: "name:se",
           suspectReasons: ["low_confidence", "degenerate_merchant_key"],
           suspectScore: 2,
@@ -37,12 +38,12 @@ describe("buildExportModel", () => {
       "Category",
       "Bank descriptor",
       "Decided by",
-      "Confidence",
+      "Assignment score",
       "Merchant key",
       "Suspect score",
       "Suspect reasons",
     ]);
-    assert.equal(model.decisions.rows[0][2], 94999);
+    assert.equal(model.decisions.rows[0][7], "1 — Guess");
     assert.equal(model.decisions.rows[0][10], "low confidence; degenerate merchant key");
     assert.equal(model.summary.rows[0][1], "Investment Returns");
     assert.ok(model.summary.legend.some((line) => /low confidence/i.test(line)));

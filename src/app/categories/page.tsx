@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useCategoryReview, useCategoryReviewDiagnosis, useCategoryReviewSummary } from '@/lib/hooks/useAdmin';
 import { suspectReasonLabel } from '@/lib/category-review/suspectLabels';
+import { assignmentScoreLabel } from '@/lib/category-review/assignmentScore';
 import { formatWhyPanel } from '@/lib/category-review/whyPanel';
 import { buildCategoryReviewWorkbookBuffer, triggerWorkbookDownload } from '@/lib/category-review/writeXlsx';
 import type { CategoryReviewItem } from '@/lib/category-review/types';
@@ -39,7 +40,11 @@ function WhyPanel({ item }: { item: CategoryReviewItem }) {
       <p className="font-medium text-[var(--foreground)]">{view.headline}</p>
       <p className="text-[var(--muted-foreground)]">
         {view.rung}
-        {view.confidence != null ? ` · confidence ${view.confidence}` : ''}
+        {view.assignmentScoreLabel
+          ? ` · ${view.assignmentScoreLabel}`
+          : view.confidence != null
+            ? ` · confidence ${view.confidence}`
+            : ''}
         {view.shopName ? ` · shop ${view.shopName}` : ''}
       </p>
       {view.descriptor ? (
@@ -210,7 +215,7 @@ export default function CategoryReviewPage() {
                       <TableHead>Amount</TableHead>
                       <TableHead>Descriptor</TableHead>
                       <TableHead>Decided by</TableHead>
-                      <TableHead>Confidence</TableHead>
+                      <TableHead>Score</TableHead>
                       <TableHead>Merchant key</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -232,7 +237,9 @@ export default function CategoryReviewPage() {
                             {item.descriptor}
                           </TableCell>
                           <TableCell>{item.decidedBy ?? '—'}</TableCell>
-                          <TableCell>{item.confidence ?? '—'}</TableCell>
+                          <TableCell>
+                            {assignmentScoreLabel(item.categoryAssignmentScore) ?? '—'}
+                          </TableCell>
                           <TableCell className="font-mono text-xs">{item.merchantKey ?? '—'}</TableCell>
                         </TableRow>
                         {item.suspectReasons.length > 0 ? (

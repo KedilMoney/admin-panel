@@ -26,6 +26,7 @@ export interface CategoryReviewItem {
   descriptor: string;
   decidedBy: string | null;
   confidence: number | null;
+  categoryAssignmentScore: number | null;
   merchantKey: string | null;
   ruleId: string | null;
   payeeName: string | null;
@@ -64,6 +65,8 @@ export interface WhyPanelView {
   descriptor: string;
   shopName: string | null;
   confidence: number | null;
+  assignmentScore: number | null;
+  assignmentScoreLabel: string | null;
   patternCategory: string | null;
   mapping: {
     categoryId: string | null;

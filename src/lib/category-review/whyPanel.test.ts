@@ -6,6 +6,7 @@ const baseItem = {
   transactionId: "txn-1",
   decidedBy: "LLM",
   confidence: 0.7,
+  categoryAssignmentScore: 1,
   descriptor: "UPI-CR GROWW",
   merchantKey: "name:groww",
 };
@@ -27,6 +28,8 @@ describe("formatWhyPanel", () => {
     assert.equal(view.shopName, "Groww");
     assert.equal(view.descriptor, "UPI-CR GROWW");
     assert.equal(view.confidence, 0.7);
+    assert.equal(view.assignmentScore, 1);
+    assert.equal(view.assignmentScoreLabel, "1 — Guess");
   });
 
   it("names the Regex match and confidence", () => {
@@ -35,6 +38,7 @@ describe("formatWhyPanel", () => {
         ...baseItem,
         decidedBy: "Regex",
         confidence: 0.99,
+        categoryAssignmentScore: 5,
         descriptor: "ACH MUTUAL FUND ICICI PRUDENTIAL",
       },
       {
@@ -52,7 +56,7 @@ describe("formatWhyPanel", () => {
 
     assert.equal(view.rung, "Regex");
     assert.match(view.headline, /MUTUAL FUND/);
-    assert.match(view.headline, /0\.99/);
+    assert.match(view.headline, /5 — Known rule/);
     assert.equal(view.patternCategory, "Investment Returns");
   });
 

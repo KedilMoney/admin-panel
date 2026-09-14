@@ -1,4 +1,5 @@
-import { suspectReasonLabel } from "./suspectLabels";
+import { suspectReasonLabel } from "./suspectLabels.ts";
+import { assignmentScoreLabel } from "./assignmentScore.ts";
 import type { CategoryReviewItem } from "./types";
 
 export interface ExportSummary {
@@ -30,14 +31,14 @@ const DECISION_HEADERS = [
   "Category",
   "Bank descriptor",
   "Decided by",
-  "Confidence",
+  "Assignment score",
   "Merchant key",
   "Suspect score",
   "Suspect reasons",
 ];
 
 const LEGEND = [
-  "low confidence — enrichment confidence below 0.80",
+  "low confidence — assignment score 1 or 2 (Guess / Weak signal)",
   "degenerate merchant key — key has no usable identity",
   "contaminated descriptor — spliced statement head before the real body",
   "category disagreement — transaction category differs from the merchant profile",
@@ -56,6 +57,7 @@ export function buildExportModel(args: {
       | "descriptor"
       | "decidedBy"
       | "confidence"
+      | "categoryAssignmentScore"
       | "merchantKey"
       | "suspectReasons"
       | "suspectScore"
@@ -75,7 +77,7 @@ export function buildExportModel(args: {
         item.categoryName,
         item.descriptor,
         item.decidedBy,
-        item.confidence,
+        assignmentScoreLabel(item.categoryAssignmentScore) ?? item.categoryAssignmentScore,
         item.merchantKey,
         item.suspectScore,
         item.suspectReasons.map(suspectReasonLabel).join("; "),

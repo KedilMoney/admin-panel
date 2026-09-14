@@ -1,4 +1,5 @@
 import type { CategoryReviewDiagnosis, CategoryReviewItem, WhyPanelView } from "./types";
+import { assignmentScoreLabel } from "./assignmentScore.ts";
 
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -29,11 +30,16 @@ function shopNameOf(
 }
 
 export function formatWhyPanel(
-  item: Pick<CategoryReviewItem, "decidedBy" | "confidence" | "descriptor" | "merchantKey">,
+  item: Pick<
+    CategoryReviewItem,
+    "decidedBy" | "confidence" | "categoryAssignmentScore" | "descriptor" | "merchantKey"
+  >,
   diagnosis: CategoryReviewDiagnosis | null | undefined
 ): WhyPanelView {
   const rung = item.decidedBy ?? diagnosis?.storedDecision?.source ?? "Unknown";
   const confidence = item.confidence ?? diagnosis?.storedDecision?.confidence ?? null;
+  const assignmentScore = item.categoryAssignmentScore ?? null;
+  const scoreLabel = assignmentScoreLabel(assignmentScore);
   const shopName = shopNameOf(item, diagnosis);
   const descriptor = item.descriptor || diagnosis?.rawDescriptor || "";
   const phaseA = findStep(diagnosis, "merchant_master_phase_a");
@@ -45,7 +51,8 @@ export function formatWhyPanel(
     headline = "No reasoning was stored. The LLM rung does not persist a rationale.";
   } else if (rung === "Regex") {
     const matched = shopName ?? asString(diagnosis?.extractedMerchant?.remarks) ?? "pattern";
-    headline = `Regex matched "${matched}"${confidence != null ? ` at ${confidence}` : ""}.`;
+    const strength = scoreLabel ?? (confidence != null ? String(confidence) : null);
+    headline = `Regex matched "${matched}"${strength != null ? ` at ${strength}` : ""}.`;
   } else if (rung === "Cache") {
     headline = "Cache hit a stored user merchant mapping.";
   } else if (rung === "Crowd") {
@@ -58,6 +65,8 @@ export function formatWhyPanel(
     descriptor,
     shopName,
     confidence,
+    assignmentScore,
+    assignmentScoreLabel: scoreLabel,
     patternCategory: asString(phaseA?.detail?.systemCategoryName),
     mapping: mappingStep
       ? {
