@@ -35,3 +35,7 @@ Dependencies are installed automatically by the environment update script
 - Type-check: `npm run typecheck` (or `npx tsc --noEmit`)
 - Build: `npm run build`
 - Lint: `npm run lint` (ESLint)
+
+## Before starting a ticket
+
+Check its "blocked by" tickets in Linear. If any is not in Move to Prod or Done, and isn't canceled, don't start. Comment which ticket it waits for and stop.
