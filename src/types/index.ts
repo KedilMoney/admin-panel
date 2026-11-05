@@ -409,3 +409,14 @@ export interface EnricherApplyResult {
   };
 }
 
+
+/** An icon in the Kedil Planner's own library (Planner API, not kedil_be). */
+export interface PlannerIcon {
+  slug: string;
+  groupTitle: string;
+  tags: string[];
+  svg: string;
+  updatedAt: string;
+}
+
+export type PlannerIconInput = Omit<PlannerIcon, 'updatedAt'>;

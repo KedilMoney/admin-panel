@@ -82,6 +82,7 @@ export const authApi = {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
+        localStorage.removeItem('planner_admin_key');
       }
     }
   },
