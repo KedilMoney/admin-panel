@@ -358,8 +358,8 @@ export default function PlannerIconsPage() {
                       filteredIcons.map((icon) => (
                         <TableRow key={icon.slug}>
                           <TableCell>
-                            <div className="h-12 w-12 rounded border border-[var(--border)] bg-[var(--muted)] flex items-center justify-center">
-                              <SvgPreview svg={icon.svg} size="h-8 w-8" />
+                            <div className="h-12 w-12 rounded border border-[var(--border)] overflow-hidden bg-[var(--muted)] flex items-center justify-center">
+                              <SvgPreview svg={icon.svg} size="h-full w-full p-1" />
                             </div>
                           </TableCell>
                           <TableCell>
