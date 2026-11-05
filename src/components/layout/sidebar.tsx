@@ -22,6 +22,7 @@ import {
   Sparkles,
   Coins,
   LayoutTemplate,
+  Shapes,
 } from 'lucide-react';
 import { authApi } from '@/lib/api/auth';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -41,6 +42,7 @@ const navigation = [
   { name: 'Category Review', href: '/categories', icon: FolderTree },
   { name: 'Income Icons', href: '/income-icons', icon: CircleDollarSign },
   { name: 'Icons', href: '/icons', icon: Image },
+  { name: 'Planner Icons', href: '/planner-icons', icon: Shapes },
   { name: 'Financial Advisors', href: '/advisors', icon: GraduationCap },
   { name: 'Support Tickets', href: '/support-tickets', icon: Headphones },
   { name: 'Analysis', href: '/analysis', icon: BarChart3 },
