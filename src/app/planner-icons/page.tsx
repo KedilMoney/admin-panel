@@ -82,7 +82,7 @@ export default function PlannerIconsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type !== 'image/svg+xml' && !file.name.toLowerCase().endsWith('.svg')) {
-      setFormError('Choose an SVG file. Planner icons take the card colour, which a PNG or JPG cannot.');
+      setFormError('Choose an SVG file.');
       e.target.value = '';
       return;
     }
@@ -285,7 +285,7 @@ export default function PlannerIconsPage() {
                       required
                       disabled={isSubmitting}
                     />
-                    <p className="text-xs text-[var(--muted-foreground)]">Heading this icon sits under in the Planner picker</p>
+                    <p className="text-xs text-[var(--muted-foreground)]">Heading this icon sits under in the Planner picker. Use &quot;People&quot; for faces: only person cards show that group.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="svg">SVG file {editingIcon ? '' : '*'}</Label>
@@ -299,7 +299,7 @@ export default function PlannerIconsPage() {
                       className="cursor-pointer"
                     />
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      Line drawing on a 24×24 viewBox, up to 20 KB. Its colour is replaced by the card colour.
+                      Square SVG, up to 200 KB. Shown in the Planner exactly as uploaded.
                     </p>
                     {formData.svg && (
                       <div className="inline-block border-2 border-[var(--border)] rounded-lg bg-[var(--muted)] p-4">
