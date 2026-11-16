@@ -415,8 +415,16 @@ export interface PlannerIcon {
   slug: string;
   groupTitle: string;
   tags: string[];
-  svg: string;
+  format?: 'svg' | 'png';
+  svg?: string;
+  png?: string;
   updatedAt: string;
 }
 
-export type PlannerIconInput = Omit<PlannerIcon, 'updatedAt'>;
+export type PlannerIconInput = {
+  slug: string;
+  groupTitle: string;
+  tags: string[];
+  svg?: string;
+  png?: string;
+};
