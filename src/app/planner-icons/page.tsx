@@ -19,18 +19,25 @@ import { formatDate } from '@/lib/utils';
 import { Plus, Trash2, RefreshCw, X, Edit, KeyRound, Search, Tag } from 'lucide-react';
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { PlannerIcon } from '@/types';
+import {
+  buildPlannerIconBody,
+  CHOOSE_ICON_FILE,
+  ICON_FILE_ACCEPT,
+  ICON_FILE_HELPER,
+  iconFormatFromPlannerIcon,
+  iconPreviewSrc,
+  hasIconDrawing,
+  plannerIconPreviewSrc,
+  readIconFile,
+} from '@/lib/planner-icons/upload';
 
-const EMPTY_FORM = { slug: '', groupTitle: '', tags: '', svg: '' };
+const EMPTY_FORM = { slug: '', groupTitle: '', tags: '', format: null as 'svg' | 'png' | null, svg: '', png: '' };
 
-/** Drawn as an image, so nothing inside the SVG can run on this page. */
-function SvgPreview({ svg, size }: { svg: string; size: string }) {
+/** Drawn as an image, so nothing inside the file can run on this page. */
+function IconPreview({ src, size }: { src: string; size: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
-      alt=""
-      className={`${size} object-contain`}
-    />
+    <img src={src} alt="" className={`${size} object-contain`} />
   );
 }
 
@@ -81,26 +88,22 @@ export default function PlannerIconsPage() {
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== 'image/svg+xml' && !file.name.toLowerCase().endsWith('.svg')) {
-      setFormError('Choose an SVG file.');
+    try {
+      const content = await readIconFile(file);
+      setFormError(null);
+      setFormData((current) => ({ ...current, ...content }));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : CHOOSE_ICON_FILE);
       e.target.value = '';
-      return;
     }
-    const svg = await file.text();
-    setFormError(null);
-    setFormData((current) => ({ ...current, svg }));
   }, []);
 
-  const payload = () => ({
-    groupTitle: formData.groupTitle.trim(),
-    tags: formData.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-    svg: formData.svg,
-  });
+  const payload = () => buildPlannerIconBody(formData);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.svg) {
-      setFormError('Choose an SVG file.');
+    if (!editingIcon && !hasIconDrawing(formData)) {
+      setFormError(CHOOSE_ICON_FILE);
       return;
     }
     setIsSubmitting(true);
@@ -123,7 +126,14 @@ export default function PlannerIconsPage() {
 
   const handleEditClick = useCallback((icon: PlannerIcon) => {
     setEditingIcon(icon);
-    setFormData({ slug: icon.slug, groupTitle: icon.groupTitle, tags: icon.tags.join(', '), svg: icon.svg });
+    setFormData({
+      slug: icon.slug,
+      groupTitle: icon.groupTitle,
+      tags: icon.tags.join(', '),
+      format: iconFormatFromPlannerIcon(icon),
+      svg: icon.svg ?? '',
+      png: icon.png ?? '',
+    });
     setFormError(null);
     setShowCreateForm(false);
   }, []);
@@ -288,22 +298,20 @@ export default function PlannerIconsPage() {
                     <p className="text-xs text-[var(--muted-foreground)]">Heading this icon sits under in the Planner picker. Use &quot;People&quot; for faces: only person cards show that group.</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="svg">SVG file {editingIcon ? '' : '*'}</Label>
+                    <Label htmlFor="icon-file">Icon file {editingIcon ? '' : '*'}</Label>
                     <Input
                       ref={fileInputRef}
-                      id="svg"
+                      id="icon-file"
                       type="file"
-                      accept=".svg,image/svg+xml"
+                      accept={ICON_FILE_ACCEPT}
                       onChange={handleFileChange}
                       disabled={isSubmitting}
                       className="cursor-pointer"
                     />
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Square SVG, up to 200 KB. Shown in the Planner exactly as uploaded.
-                    </p>
-                    {formData.svg && (
+                    <p className="text-xs text-[var(--muted-foreground)]">{ICON_FILE_HELPER}</p>
+                    {iconPreviewSrc(formData) && (
                       <div className="inline-block border-2 border-[var(--border)] rounded-lg bg-[var(--muted)] p-4">
-                        <SvgPreview svg={formData.svg} size="h-24 w-24" />
+                        <IconPreview src={iconPreviewSrc(formData)!} size="h-24 w-24" />
                       </div>
                     )}
                   </div>
@@ -359,7 +367,7 @@ export default function PlannerIconsPage() {
                         <TableRow key={icon.slug}>
                           <TableCell>
                             <div className="h-12 w-12 rounded border border-[var(--border)] overflow-hidden bg-[var(--muted)] flex items-center justify-center">
-                              <SvgPreview svg={icon.svg} size="h-full w-full p-1" />
+                              <IconPreview src={plannerIconPreviewSrc(icon)} size="h-full w-full p-1" />
                             </div>
                           </TableCell>
                           <TableCell>

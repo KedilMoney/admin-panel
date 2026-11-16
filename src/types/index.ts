@@ -415,7 +415,9 @@ export interface PlannerIcon {
   slug: string;
   groupTitle: string;
   tags: string[];
-  svg: string;
+  format?: 'svg' | 'png';
+  svg?: string;
+  png?: string;
   updatedAt: string;
 }
 
