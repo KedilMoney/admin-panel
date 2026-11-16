@@ -19,18 +19,38 @@ import { formatDate } from '@/lib/utils';
 import { Plus, Trash2, RefreshCw, X, Edit, KeyRound, Search, Tag } from 'lucide-react';
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { PlannerIcon } from '@/types';
+import {
+  MISSING_ICON_FILE_MESSAGE,
+  WRONG_ICON_FILE_MESSAGE,
+  buildPlannerIconPayload,
+  iconFileKind,
+  iconPreviewDataUrl,
+  readIconFileFromBlob,
+  type PlannerIconFileKind,
+} from '@/lib/planner-icons/icon-file';
 
-const EMPTY_FORM = { slug: '', groupTitle: '', tags: '', svg: '' };
+const EMPTY_FORM: {
+  slug: string;
+  groupTitle: string;
+  tags: string;
+  svg: string;
+  png: string;
+  format: '' | PlannerIconFileKind;
+} = { slug: '', groupTitle: '', tags: '', svg: '', png: '', format: '' };
 
-/** Drawn as an image, so nothing inside the SVG can run on this page. */
-function SvgPreview({ svg, size }: { svg: string; size: string }) {
+/** Drawn as an image, so nothing inside the file can run on this page. */
+function IconPreview({
+  icon,
+  size,
+}: {
+  icon: { format?: PlannerIconFileKind; svg?: string; png?: string };
+  size: string;
+}) {
+  const src = iconPreviewDataUrl(icon);
+  if (!src) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
-      alt=""
-      className={`${size} object-contain`}
-    />
+    <img src={src} alt="" className={`${size} object-contain`} />
   );
 }
 
@@ -81,26 +101,44 @@ export default function PlannerIconsPage() {
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== 'image/svg+xml' && !file.name.toLowerCase().endsWith('.svg')) {
-      setFormError('Choose an SVG file.');
+    const kind = iconFileKind(file.name, file.type);
+    if (!kind) {
+      setFormError(WRONG_ICON_FILE_MESSAGE);
       e.target.value = '';
       return;
     }
-    const svg = await file.text();
-    setFormError(null);
-    setFormData((current) => ({ ...current, svg }));
+    try {
+      const image = await readIconFileFromBlob(file, kind);
+      setFormError(null);
+      setFormData((current) => ({
+        ...current,
+        format: image.format,
+        svg: image.svg ?? '',
+        png: image.png ?? '',
+      }));
+    } catch {
+      setFormError('Could not read that file.');
+      e.target.value = '';
+    }
   }, []);
 
-  const payload = () => ({
-    groupTitle: formData.groupTitle.trim(),
-    tags: formData.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-    svg: formData.svg,
-  });
+  const payload = () =>
+    buildPlannerIconPayload(formData.groupTitle, formData.tags, {
+      format: formData.format || (formData.png ? 'png' : 'svg'),
+      svg: formData.svg || undefined,
+      png: formData.png || undefined,
+    });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.svg) {
-      setFormError('Choose an SVG file.');
+    const hasImage =
+      formData.format === 'png' ? !!formData.png : formData.format === 'svg' ? !!formData.svg : false;
+    if (!editingIcon && !hasImage) {
+      setFormError(MISSING_ICON_FILE_MESSAGE);
+      return;
+    }
+    if (editingIcon && !hasImage) {
+      setFormError(MISSING_ICON_FILE_MESSAGE);
       return;
     }
     setIsSubmitting(true);
@@ -123,7 +161,16 @@ export default function PlannerIconsPage() {
 
   const handleEditClick = useCallback((icon: PlannerIcon) => {
     setEditingIcon(icon);
-    setFormData({ slug: icon.slug, groupTitle: icon.groupTitle, tags: icon.tags.join(', '), svg: icon.svg });
+    const format: PlannerIconFileKind =
+      icon.format ?? (icon.png ? 'png' : 'svg');
+    setFormData({
+      slug: icon.slug,
+      groupTitle: icon.groupTitle,
+      tags: icon.tags.join(', '),
+      svg: icon.svg ?? '',
+      png: icon.png ?? '',
+      format,
+    });
     setFormError(null);
     setShowCreateForm(false);
   }, []);
@@ -288,22 +335,25 @@ export default function PlannerIconsPage() {
                     <p className="text-xs text-[var(--muted-foreground)]">Heading this icon sits under in the Planner picker. Use &quot;People&quot; for faces: only person cards show that group.</p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="svg">SVG file {editingIcon ? '' : '*'}</Label>
+                    <Label htmlFor="icon-file">Icon file {editingIcon ? '' : '*'}</Label>
                     <Input
                       ref={fileInputRef}
-                      id="svg"
+                      id="icon-file"
                       type="file"
-                      accept=".svg,image/svg+xml"
+                      accept=".svg,image/svg+xml,.png,image/png"
                       onChange={handleFileChange}
                       disabled={isSubmitting}
                       className="cursor-pointer"
                     />
                     <p className="text-xs text-[var(--muted-foreground)]">
-                      Square SVG, up to 200 KB. Shown in the Planner exactly as uploaded.
+                      Square SVG or PNG. SVG up to 200 KB, PNG up to 300 KB. Shown in the Planner exactly as uploaded.
                     </p>
-                    {formData.svg && (
+                    {(formData.svg || formData.png) && (
                       <div className="inline-block border-2 border-[var(--border)] rounded-lg bg-[var(--muted)] p-4">
-                        <SvgPreview svg={formData.svg} size="h-24 w-24" />
+                        <IconPreview
+                          icon={{ format: formData.format || undefined, svg: formData.svg, png: formData.png }}
+                          size="h-24 w-24"
+                        />
                       </div>
                     )}
                   </div>
@@ -359,7 +409,7 @@ export default function PlannerIconsPage() {
                         <TableRow key={icon.slug}>
                           <TableCell>
                             <div className="h-12 w-12 rounded border border-[var(--border)] overflow-hidden bg-[var(--muted)] flex items-center justify-center">
-                              <SvgPreview svg={icon.svg} size="h-full w-full p-1" />
+                              <IconPreview icon={icon} size="h-full w-full p-1" />
                             </div>
                           </TableCell>
                           <TableCell>
