@@ -20,10 +20,10 @@ import { Plus, Trash2, RefreshCw, X, Edit, KeyRound, Search, Tag } from 'lucide-
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { PlannerIcon } from '@/types';
 import {
-  PLANNER_ICON_WRONG_FILE_TYPE,
+  applyPlannerIconFileResult,
+  attemptPlannerIconSubmit,
   plannerIconArtworkFromIcon,
   plannerIconHasArtwork,
-  plannerIconPayloadArtwork,
   plannerIconPreviewSrc,
   readPlannerIconFile,
 } from '@/lib/planner-icon-artwork';
@@ -105,57 +105,38 @@ export default function PlannerIconsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const result = await readPlannerIconFile(file);
-    if (!result.ok) {
-      setFormError(result.error);
-      e.target.value = '';
-      return;
-    }
-    setFormError(null);
-    setFormData((current) => ({
-      ...current,
-      format: result.artwork.format,
-      svg: result.artwork.svg ?? '',
-      png: result.artwork.png ?? '',
-    }));
+    setFormData((current) => {
+      const next = applyPlannerIconFileResult(
+        { format: current.format, svg: current.svg, png: current.png },
+        result,
+      );
+      setFormError(next.error);
+      return { ...current, ...next.artwork };
+    });
+    e.target.value = '';
   }, []);
-
-  const payload = () => {
-    const artwork = plannerIconPayloadArtwork(formData);
-    if (!artwork) return null;
-    return {
-      groupTitle: formData.groupTitle.trim(),
-      tags: formData.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      ...artwork,
-    };
-  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plannerIconHasArtwork(formData)) {
-      setFormError(PLANNER_ICON_WRONG_FILE_TYPE);
-      return;
-    }
-    const body = payload();
-    if (!body) {
-      setFormError(PLANNER_ICON_WRONG_FILE_TYPE);
-      return;
-    }
     setIsSubmitting(true);
     setFormError(null);
-    try {
-      if (editingIcon) {
-        await updateIcon.mutateAsync({ slug: editingIcon.slug, data: body });
-        setEditingIcon(null);
-      } else {
-        await createIcon.mutateAsync({ slug: formData.slug.trim(), ...body });
-        setShowCreateForm(false);
-      }
-      resetForm();
-    } catch (err) {
-      setFormError(plannerErrorMessage(err));
-    } finally {
+    const outcome = await attemptPlannerIconSubmit(formData, {
+      mode: editingIcon ? 'update' : 'create',
+      create: (data) => createIcon.mutateAsync(data),
+      update: (data) => {
+        if (!editingIcon) return Promise.reject(new Error('No icon selected'));
+        return updateIcon.mutateAsync({ slug: editingIcon.slug, data });
+      },
+    });
+    if (!outcome.ok) {
+      setFormError(outcome.error);
       setIsSubmitting(false);
+      return;
     }
+    if (editingIcon) setEditingIcon(null);
+    else setShowCreateForm(false);
+    resetForm();
+    setIsSubmitting(false);
   };
 
   const handleEditClick = useCallback((icon: PlannerIcon) => {
